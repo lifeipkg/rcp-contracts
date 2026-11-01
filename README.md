@@ -4,6 +4,8 @@
 
 ## 目录
 
+> 平台全景（业务、架构、数据面分层、演进路线）见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)，服务清单见 [`docs/SERVICES.md`](docs/SERVICES.md)。
+
 | 路径 | 是什么 |
 |---|---|
 | `registry/services.yaml` | 服务登记：名称、端口、owner、能力、依赖、健康检查、挂的契约。也是 `baseline_stack` 版本真源 |
