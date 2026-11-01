@@ -37,6 +37,12 @@ libraries:
 
 # HTTP 服务：名称即服务发现标识，端口即本地默认端口。
 # external: true 表示允许被工作区外部直接访问；其余服务只允许集群内互调。
+#
+# expected（可选）：声明本服务"当前图位置"是有意状态，用于区分"有意无下游"与
+# "漏登记依赖方"（E109/E110 是启发式，分不清二者）。声明了任一真值标志就必须给
+# reason/owner/review_by，review_by 过期后恢复告警：
+#   no_dependents: true  预期入度为 0（有意暂无下游，消 E109）
+#   unreachable:   true  预期从任何对外入口不可达（有意暂未接入数据面，消 E110）
 services:
   - name: api-gateway
     repo: rcp-api-gateway
@@ -121,6 +127,13 @@ services:
     health: /actuator/health
     contracts:
       - contracts/openapi/dataway.yaml
+    # 数据面尚未启用：巡查线尚未接 data.query/data.execute，故当前无下游、不可达。
+    expected:
+      no_dependents: true
+      unreachable: true
+      reason: 数据面尚未启用；待 discovery 接入后由 api-gateway 挂依赖
+      owner: platform
+      review_by: 2027-03-31
 
   - name: db-ops
     repo: rcp-db-ops
@@ -135,6 +148,13 @@ services:
     health: /actuator/health
     contracts:
       - contracts/openapi/db-ops.yaml
+    # 迁移执行器暂由平台侧手动/脚本调用，尚未有运行时服务依赖它，故当前无下游、不可达。
+    expected:
+      no_dependents: true
+      unreachable: true
+      reason: 迁移执行器暂由平台侧手动调用；待接入后由 data-gateway/ops 流程挂依赖
+      owner: platform
+      review_by: 2027-03-31
 
   - name: web
     repo: rcp-web
