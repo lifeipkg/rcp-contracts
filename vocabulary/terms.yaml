@@ -1,15 +1,25 @@
 schema: rcp.vocabulary/v1
 # 平台立名词汇表。新概念先在此立名，再进契约与实现；同一概念禁止多套叫法。
+#
+# covers：该术语覆盖的 TBox 种类（kind）。W303 按它判断"种类有没有立名"，
+# 新增 kind 必须同时在这里挂一个术语，否则检查器报警。
 terms:
   - term: patrol_event
     zh: 巡查事件
     definition: 进入平台统一巡查入口的一次业务事实，以 event_id + version 唯一标识。
     owner: platform
 
+  - term: api_gateway
+    zh: 网关
+    definition: 平台对外唯一 HTTP 入口，负责幂等判定、路由、分级处置与巡查线降级。
+    owner: platform
+    covers: [gateway]
+
   - term: patrol_line
     zh: 巡查线
     definition: 按业务域切分的风控判定单元，四条线为 content / message / account / fund。
     owner: platform
+    covers: [patrol-line]
 
   - term: patrol_verdict
     zh: 巡查结论
@@ -40,8 +50,24 @@ terms:
     zh: 数据网关
     definition: 业务服务访问数据库的唯一出口，只接受声明式查询与模板化写入，拒绝裸 SQL。
     owner: rcp-dataway
+    covers: [data-gateway]
 
   - term: schema_migration
     zh: 表结构迁移
     definition: 版本化的 DDL 变更单元，只能由 db-ops 执行，业务仓不得自带 DDL。
     owner: rcp-db-ops
+    covers: [db-ops]
+
+  - term: ops_console
+    zh: 运营控制台
+    definition: 面向风控运营的只读界面，只经 api-gateway 取数，不直连任何后端服务。
+    owner: platform
+    covers: [frontend]
+
+  - term: meta_repo
+    zh: 元仓
+    definition: >-
+      不参与运行时数据面的仓：契约声明、本体检查工具、迁移与部署清单。
+      无端口、不部署、不挂 OpenAPI，但必须有 owner 与登记。
+    owner: platform
+    covers: [meta]

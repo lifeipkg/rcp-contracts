@@ -49,3 +49,29 @@ constraints:
     check: registry
     rule: |
       services 中每个服务必须有非空 contracts（frontend 除外），且契约文件在仓内存在。
+
+  - id: RL-007
+    name: no-hardcoded-upstream
+    zh: 上游地址不得写死
+    rationale: >-
+      部署清单写死服务地址后，扩缩容、灰度、故障转移都要改配置并重发；
+      消费方也无法在未知上游存在时被自动发现。
+    check: repo-layout
+    rule: |
+      rcp-ops 下的 compose 与 K8s 清单不得出现指向 internal 服务
+      （registry 中 external=false）的 http(s)://<服务名>:<端口> 地址。
+      无法立即消除时须在下方 exceptions 登记，并给出 review_by 复审日期。
+
+# 例外登记：无法立即消除的偏离。必须同时给出 scope（glob）、match（正则）、
+# reason、owner、review_by —— 缺一项视为未登记。
+# 检查器命中即降级为 warn；review_by 过期后自动恢复为 error。
+exceptions:
+  - redline: RL-007
+    scope: "rcp-ops/**"
+    match: "http://(content|message|account|fund)-patrol:\\d+"
+    reason: >-
+      服务发现尚未接入：网关路由以环境变量给出上游地址，由 Docker DNS / K8s Service
+      承担寻址。Nacos 的登记、compose 服务与 K8s 清单已就位（见 docs/DISCOVERY.md），
+      但各 Java 服务尚未引入 discovery 依赖，无真实集群可验证，故暂留环境变量路径。
+    owner: platform
+    review_by: 2026-12-31
