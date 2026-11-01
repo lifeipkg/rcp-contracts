@@ -148,3 +148,34 @@ services:
       - api-gateway
     health: /
     contracts: []
+
+  # 元仓（kind=meta）：不参与运行时数据面，无端口、不部署、不挂 OpenAPI。
+  # 登记它们的目的不是"当服务用"，而是让 owner 与仓边界有唯一出处——
+  # 否则 rcp-ops 这类承担迁移真源的仓在平台登记里没有户头，E107 也无法区分
+  # "有意游离"与"漏登记"。
+  - name: contracts
+    repo: rcp-contracts
+    kind: meta
+    external: false
+    owner: platform
+    capabilities: []
+    depends_on: []
+    contracts: []
+
+  - name: ontology
+    repo: rcp-ontology
+    kind: meta
+    external: false
+    owner: platform
+    capabilities: []
+    depends_on: []
+    contracts: []
+
+  - name: ops
+    repo: rcp-ops
+    kind: meta
+    external: false
+    owner: platform
+    capabilities: []
+    depends_on: []
+    contracts: []
