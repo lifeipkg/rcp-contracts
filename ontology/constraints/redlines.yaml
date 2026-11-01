@@ -1,5 +1,11 @@
 schema: rcp.constraints/v1
 # 架构红线：可机械检查的硬约束。由 rcp-ontology 的 check 校验，违反即红。
+#
+# spec：机器可读的检查规格（policy-as-code 第一步）。type 决定执行器：
+#   registry-assert  登记断言，判定由 kinds.yaml 属性承载（via 指明属性）
+#   cross-source     跨源逐字比对（决策枚举、分值等）
+#   file-scan        文件系统扫描（DDL / JDBC / 上游地址写死）
+# spec 合法性由 rcp-ontology 的 E302 校验；缺 spec 报 W305（未参数化）。
 constraints:
   - id: RL-001
     name: patrol-line-no-cross-call
@@ -8,6 +14,9 @@ constraints:
     check: registry
     rule: |
       kind=patrol-line 的服务，其 depends_on 中不得出现任何 kind=patrol-line 的服务。
+    spec:
+      type: registry-assert
+      via: kinds.allowed_depends_on_kinds
 
   - id: RL-002
     name: external-entry-is-gateway
@@ -16,6 +25,9 @@ constraints:
     check: registry
     rule: |
       external=true 的服务只允许 kind in [gateway, frontend]；其余服务必须 external=false。
+    spec:
+      type: registry-assert
+      via: kinds.must_be_external
 
   - id: RL-003
     name: decision-single-source
@@ -25,6 +37,19 @@ constraints:
     rule: |
       contracts/schemas/decision.yaml 的取值集合必须与 rcp-core 的 Decision 枚举完全一致；
       其他服务的 OpenAPI 只能 $ref 该 schema，不得内联枚举。
+    spec:
+      type: cross-source
+      sources:
+        - path: contracts/schemas/decision.yaml
+          field: enum
+        - path: ../../rcp-ontology/concepts/decisions.yaml
+          list: enum
+          key: code
+      assert: identical
+      fields:
+        - a: x-base-score
+          b: base_score
+          assert: equal
 
   - id: RL-004
     name: ddl-only-via-dbops
@@ -33,6 +58,12 @@ constraints:
     check: repo-layout
     rule: |
       除 rcp-ops/migrations 外，任何仓不得包含 *.sql 的建表/改表语句。
+    spec:
+      type: file-scan
+      include: ["*.sql"]
+      exclude_dirs: [.git, .agents, .idea, target, node_modules, dist, build, __pycache__]
+      allow_prefixes: ["rcp-ops/migrations/", "migrations/"]
+      match: '\b(?:create|alter|drop|truncate)\s+(?:table|index|view|database|schema|unique\s+index)\b'
 
   - id: RL-005
     name: business-data-only-via-dataway
@@ -41,6 +72,12 @@ constraints:
     check: repo-layout
     rule: |
       业务服务仓的 pom 不得引入 JDBC 驱动依赖；数据访问只能通过 dataway 的 HTTP 契约。
+    spec:
+      type: file-scan
+      include: ["pom.xml"]
+      extract: dependency.groupId
+      deny_values: [mysql, com.mysql, com.mysql.jdbc, org.postgresql, com.h2database, com.oracle.database.jdbc, org.mariadb.jdbc]
+      allow_kinds: [data-gateway, db-ops]
 
   - id: RL-006
     name: service-must-register
@@ -49,6 +86,9 @@ constraints:
     check: registry
     rule: |
       services 中每个服务必须有非空 contracts（frontend 除外），且契约文件在仓内存在。
+    spec:
+      type: registry-assert
+      via: kinds.requires_contract
 
   - id: RL-007
     name: no-hardcoded-upstream
@@ -61,6 +101,15 @@ constraints:
       rcp-ops 下的 compose 与 K8s 清单不得出现指向 internal 服务
       （registry 中 external=false）的 http(s)://<服务名>:<端口> 地址。
       无法立即消除时须在下方 exceptions 登记，并给出 review_by 复审日期。
+    spec:
+      type: file-scan
+      scan_prefix: rcp-ops/
+      include: ["*.yml", "*.yaml"]
+      match: 'https?://([a-z][a-z0-9-]*):(\d{2,5})'
+      internal_hosts:
+        from: registry
+        where: external == false
+      exceptions: review_by
 
 # 例外登记：无法立即消除的偏离。必须同时给出 scope（glob）、match（正则）、
 # reason、owner、review_by —— 缺一项视为未登记。
