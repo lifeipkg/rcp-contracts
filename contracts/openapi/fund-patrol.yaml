@@ -1,0 +1,44 @@
+openapi: 3.0.3
+info:
+  title: Risk Control Platform · Fund Patrol
+  version: 1.0.0
+  description: 资金巡查线。补贴薅取规则引擎，只被网关调用。
+servers:
+  - url: http://localhost:8084
+paths:
+  /api/v1/patrol/check:
+    post:
+      operationId: checkFundGrant
+      summary: 补贴领取风险判定
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, grantAmount]
+              properties:
+                eventId:
+                  type: string
+                userId:
+                  type: integer
+                  format: int64
+                grantAmount:
+                  type: integer
+                accountAgeDays:
+                  type: integer
+                sameDeviceAccounts:
+                  type: integer
+                sameBankCardAccounts:
+                  type: integer
+                applyCount24h:
+                  type: integer
+      responses:
+        '200':
+          description: 巡查结论
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/patrol-verdict.yaml
+        '400':
+          description: 必填字段缺失

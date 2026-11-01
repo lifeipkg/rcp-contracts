@@ -1,0 +1,135 @@
+schema: rcp.registry/v1
+platform: risk-control-platform
+updated: 2026-11-01
+
+# 平台基座版本真源：服务侧必须对齐，禁止各仓自行抬版本。
+# 消费方式（工作区根目录）：grep -A6 '^baseline_stack:' rcp-contracts/registry/services.yaml
+baseline_stack:
+  java: "17"
+  spring_boot: "3.3.5"
+  maven_surefire: "3.2.5"
+
+# 库（非 HTTP 服务）：只被依赖，不登记端口。
+libraries:
+  - name: rcp-core
+    repo: rcp-core
+    artifact: com.risk.platform:rcp-core:1.0.0
+    owner: platform
+    capabilities:
+      - decision.model
+      - patrol.pipeline
+      - rule.engine
+
+# HTTP 服务：名称即服务发现标识，端口即本地默认端口。
+# external: true 表示允许被工作区外部直接访问；其余服务只允许集群内互调。
+services:
+  - name: api-gateway
+    repo: rcp-api-gateway
+    kind: gateway
+    port: 8080
+    external: true
+    owner: platform
+    capabilities:
+      - patrol.dispatch
+      - patrol.domains
+    depends_on:
+      - content-patrol
+      - message-patrol
+      - account-patrol
+      - fund-patrol
+    health: /actuator/health
+    contracts:
+      - contracts/openapi/api-gateway.yaml
+
+  - name: content-patrol
+    repo: rcp-content-patrol
+    kind: patrol-line
+    port: 8081
+    external: false
+    owner: risk-content
+    capabilities:
+      - patrol.content.dedup
+    depends_on: []
+    health: /actuator/health
+    contracts:
+      - contracts/openapi/content-patrol.yaml
+
+  - name: message-patrol
+    repo: rcp-message-patrol
+    kind: patrol-line
+    port: 8082
+    external: false
+    owner: risk-message
+    capabilities:
+      - patrol.message.ac
+    depends_on: []
+    health: /actuator/health
+    contracts:
+      - contracts/openapi/message-patrol.yaml
+
+  - name: account-patrol
+    repo: rcp-account-patrol
+    kind: patrol-line
+    port: 8083
+    external: false
+    owner: risk-account
+    capabilities:
+      - patrol.account.rule
+    depends_on: []
+    health: /actuator/health
+    contracts:
+      - contracts/openapi/account-patrol.yaml
+
+  - name: fund-patrol
+    repo: rcp-fund-patrol
+    kind: patrol-line
+    port: 8084
+    external: false
+    owner: risk-fund
+    capabilities:
+      - patrol.fund.rule
+    depends_on: []
+    health: /actuator/health
+    contracts:
+      - contracts/openapi/fund-patrol.yaml
+
+  - name: dataway
+    repo: rcp-dataway
+    kind: data-gateway
+    port: 8090
+    external: false
+    owner: platform
+    capabilities:
+      - data.query
+      - data.execute
+    depends_on: []
+    health: /actuator/health
+    contracts:
+      - contracts/openapi/dataway.yaml
+
+  - name: db-ops
+    repo: rcp-db-ops
+    kind: db-ops
+    port: 8091
+    external: false
+    owner: platform
+    capabilities:
+      - schema.migrate
+      - schema.version
+    depends_on: []
+    health: /actuator/health
+    contracts:
+      - contracts/openapi/db-ops.yaml
+
+  - name: web
+    repo: rcp-web
+    kind: frontend
+    port: 5173
+    external: true
+    owner: platform
+    capabilities:
+      - ops.console
+    depends_on:
+      - api-gateway
+    health: /
+    contracts: []

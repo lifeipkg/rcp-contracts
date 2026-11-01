@@ -1,0 +1,40 @@
+schema: rcp.contract.schema/v1
+name: PatrolEvent
+zh: 巡查事件
+type: object
+description: 平台唯一接入契约。请求与响应同文件，避免两侧漂移。
+request:
+  required: [eventId, domain, version]
+  properties:
+    eventId:
+      type: string
+      description: 幂等键，形如 job:123 / msg:456 / acc:138xxx / fund:789
+    domain:
+      type: string
+      enum: [content, message, account, fund]
+    version:
+      type: integer
+      minimum: 1
+      description: 事件版本，重放或更正时单调递增
+    payload:
+      type: object
+      additionalProperties: true
+      description: 巡查线业务字段，原样转发给对应巡查线
+response:
+  required: [accepted, stateRollbackProtected]
+  properties:
+    accepted:
+      type: boolean
+      description: 是否受理；幂等拒绝时为 false
+    rejectReason:
+      type: string
+      description: 拒绝原因（如 STALE_VERSION）
+    verdict:
+      $ref: patrol-verdict.yaml
+    disposition:
+      type: object
+      additionalProperties: true
+      description: 分级处置动作
+    stateRollbackProtected:
+      type: boolean
+      description: 状态机是否拦截了一次状态回跳

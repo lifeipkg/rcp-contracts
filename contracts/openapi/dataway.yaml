@@ -1,0 +1,94 @@
+openapi: 3.0.3
+info:
+  title: Risk Control Platform · Dataway
+  version: 1.0.0
+  description: |
+    数据网关：业务服务访问数据库的唯一出口。业务服务不持 JDBC 驱动、不写裸 SQL。
+    只接受两类请求——① 声明式只读查询（必须是 SELECT 且只引用白名单表）；
+    ② 模板化写入（模板在服务端登记，客户端只传模板 ID 与参数）。
+servers:
+  - url: http://localhost:8090
+paths:
+  /dataway/query:
+    post:
+      operationId: datawayQuery
+      summary: 声明式只读查询
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [datasource, sql]
+              properties:
+                datasource:
+                  type: string
+                  description: 数据源名（服务端配置，客户端不得指定连接串）
+                sql:
+                  type: string
+                  description: 仅允许单条 SELECT；出现 DML/DDL/多语句即拒绝
+                params:
+                  type: array
+                  items: {}
+                  description: 位置参数，禁止字符串拼接
+                maxRows:
+                  type: integer
+                  default: 100
+      responses:
+        '200':
+          description: 查询结果
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [columns, rows, rowCount]
+                properties:
+                  columns:
+                    type: array
+                    items:
+                      type: string
+                    description: 列名，统一小写（跨库大小写规则不一致，网关出口统一口径）
+                  rows:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  rowCount:
+                    type: integer
+                  elapsedMs:
+                    type: integer
+        '400':
+          description: SQL 未通过守卫（非 SELECT / 引用非白名单表 / 多语句）
+  /dataway/execute:
+    post:
+      operationId: datawayExecute
+      summary: 模板化写入
+      description: 只接受服务端登记的写入模板；客户端传裸 DML 一律拒绝。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [datasource, templateId]
+              properties:
+                datasource:
+                  type: string
+                templateId:
+                  type: string
+                  description: 写入模板 ID，须在白名单内
+                params:
+                  type: array
+                  items: {}
+      responses:
+        '200':
+          description: 执行结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  affectedRows:
+                    type: integer
+        '400':
+          description: 模板不存在或参数不匹配

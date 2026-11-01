@@ -1,0 +1,24 @@
+schema: rcp.contract.schema/v1
+name: PatrolVerdict
+zh: 巡查结论
+type: object
+description: 单条巡查线对事件的统一结论，也是巡查线服务对网关的响应契约。
+required: [eventId, decision, score, reason, detail]
+properties:
+  eventId:
+    type: string
+    description: 事件 ID（岗位/消息/账号/资金单），与入参 event_id 一致
+  decision:
+    $ref: decision.yaml
+  score:
+    type: integer
+    minimum: 0
+    maximum: 100
+    description: 风险分，规则引擎或检测器的融合分
+  reason:
+    type: string
+    description: 判定来源标识（如 SIMHASH_DUPLICATE / AC_HIT / PATROL_SERVICE_DEGRADED）
+  detail:
+    type: object
+    additionalProperties: true
+    description: 附加明细（命中词、相似岗位、团伙 ID、domain 等）

@@ -1,0 +1,46 @@
+openapi: 3.0.3
+info:
+  title: Risk Control Platform · Account Patrol
+  version: 1.0.0
+  description: 账号巡查线。接码/养号规则引擎，只被网关调用。
+servers:
+  - url: http://localhost:8083
+paths:
+  /api/v1/patrol/check:
+    post:
+      operationId: checkAccount
+      summary: 账号风险判定
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                eventId:
+                  type: string
+                phone:
+                  type: string
+                virtualSegment:
+                  type: boolean
+                  description: 是否虚拟号段
+                sameIpRegister24h:
+                  type: integer
+                sameDeviceAccounts:
+                  type: integer
+                registerHour:
+                  type: integer
+                  minimum: 0
+                  maximum: 23
+                postCount24h:
+                  type: integer
+      responses:
+        '200':
+          description: 巡查结论
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/patrol-verdict.yaml
+        '400':
+          description: phone 缺失

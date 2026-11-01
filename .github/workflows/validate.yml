@@ -1,0 +1,41 @@
+name: contracts
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: YAML 全部可解析
+        run: |
+          python -m pip install --quiet pyyaml
+          python - <<'PY'
+          import glob, sys, yaml
+          bad = []
+          for f in sorted(glob.glob('**/*.yaml', recursive=True) + glob.glob('**/*.yml', recursive=True)):
+              try:
+                  yaml.safe_load(open(f, encoding='utf-8'))
+              except Exception as exc:
+                  bad.append(f'{f}: {exc}')
+          print('\n'.join(bad) if bad else f'OK: {len(glob.glob("**/*.yaml", recursive=True))} 个 YAML')
+          sys.exit(1 if bad else 0)
+          PY
+
+      - name: 检出本体仓
+        uses: actions/checkout@v4
+        with:
+          repository: lifeipkg/rcp-ontology
+          path: .deps/rcp-ontology
+
+      - name: 契约·登记·红线 一致性检查
+        run: |
+          python .deps/rcp-ontology/rcp_ontology/cli.py check --contracts .

@@ -1,0 +1,47 @@
+schema: rcp.vocabulary/v1
+# 平台立名词汇表。新概念先在此立名，再进契约与实现；同一概念禁止多套叫法。
+terms:
+  - term: patrol_event
+    zh: 巡查事件
+    definition: 进入平台统一巡查入口的一次业务事实，以 event_id + version 唯一标识。
+    owner: platform
+
+  - term: patrol_line
+    zh: 巡查线
+    definition: 按业务域切分的风控判定单元，四条线为 content / message / account / fund。
+    owner: platform
+
+  - term: patrol_verdict
+    zh: 巡查结论
+    definition: 单条巡查线对事件给出的统一结论，含决策、风险分、原因与明细。
+    owner: rcp-core
+
+  - term: decision
+    zh: 决策
+    definition: 处置等级枚举，取值唯一来自 rcp-core 的 Decision，禁止各服务私造同名枚举。
+    owner: rcp-core
+
+  - term: disposition
+    zh: 分级处置
+    definition: 由网关按决策等级映射出的执行动作（放行/提示/限流/加审/拦截/封禁）。
+    owner: api-gateway
+
+  - term: domain
+    zh: 巡查域
+    definition: 事件所属巡查线的标识，取值 content / message / account / fund。
+    owner: platform
+
+  - term: idempotency_key
+    zh: 幂等键
+    definition: event_id + version 组合；同键重放不再产生新裁决，旧版本回放被拒绝。
+    owner: api-gateway
+
+  - term: dataway
+    zh: 数据网关
+    definition: 业务服务访问数据库的唯一出口，只接受声明式查询与模板化写入，拒绝裸 SQL。
+    owner: rcp-dataway
+
+  - term: schema_migration
+    zh: 表结构迁移
+    definition: 版本化的 DDL 变更单元，只能由 db-ops 执行，业务仓不得自带 DDL。
+    owner: rcp-db-ops

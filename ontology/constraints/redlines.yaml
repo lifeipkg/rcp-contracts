@@ -1,0 +1,51 @@
+schema: rcp.constraints/v1
+# 架构红线：可机械检查的硬约束。由 rcp-ontology 的 check 校验，违反即红。
+constraints:
+  - id: RL-001
+    name: patrol-line-no-cross-call
+    zh: 巡查线之间不得互相调用
+    rationale: 巡查线必须可独立部署、独立降级；互调会造成级联降级与责任不清。
+    check: registry
+    rule: |
+      kind=patrol-line 的服务，其 depends_on 中不得出现任何 kind=patrol-line 的服务。
+
+  - id: RL-002
+    name: external-entry-is-gateway
+    zh: 对外入口唯一
+    rationale: 边缘只暴露网关与前端；服务端口直接对外会绕过幂等、状态机与分级处置。
+    check: registry
+    rule: |
+      external=true 的服务只允许 kind in [gateway, frontend]；其余服务必须 external=false。
+
+  - id: RL-003
+    name: decision-single-source
+    zh: 决策语义唯一来源
+    rationale: 四条线各自发明决策等级会导致处置层无法分级，风险分不可比。
+    check: contract
+    rule: |
+      contracts/schemas/decision.yaml 的取值集合必须与 rcp-core 的 Decision 枚举完全一致；
+      其他服务的 OpenAPI 只能 $ref 该 schema，不得内联枚举。
+
+  - id: RL-004
+    name: ddl-only-via-dbops
+    zh: DDL 只能经 db-ops
+    rationale: 表结构变更需版本化、可回滚、可审计；散落在业务仓里无法保证顺序与恢复。
+    check: repo-layout
+    rule: |
+      除 rcp-ops/migrations 外，任何仓不得包含 *.sql 的建表/改表语句。
+
+  - id: RL-005
+    name: business-data-only-via-dataway
+    zh: 业务读写只能经 dataway
+    rationale: 直连数据库会让连接、权限、审计与限流全部失效。
+    check: repo-layout
+    rule: |
+      业务服务仓的 pom 不得引入 JDBC 驱动依赖；数据访问只能通过 dataway 的 HTTP 契约。
+
+  - id: RL-006
+    name: service-must-register
+    zh: 服务必须登记并挂契约
+    rationale: 未登记的服务等于绕过契约先行，消费侧无法对表。
+    check: registry
+    rule: |
+      services 中每个服务必须有非空 contracts（frontend 除外），且契约文件在仓内存在。

@@ -1,0 +1,110 @@
+openapi: 3.0.3
+info:
+  title: Risk Control Platform · DB Ops
+  version: 1.0.0
+  description: |
+    数据库操作服务：版本化 DDL 的唯一执行者。表结构迁移真源在 rcp-ops/migrations，
+    本服务按版本号顺序执行、记录 schema_version、支持回滚到指定版本。
+    业务仓不得自带 DDL（红线 RL-004）。
+servers:
+  - url: http://localhost:8091
+paths:
+  /dbops/migrate:
+    post:
+      operationId: migrate
+      summary: 执行待应用的迁移
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                targetVersion:
+                  type: string
+                  description: 迁移到指定版本，缺省为最新
+      responses:
+        '200':
+          description: 迁移结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  applied:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AppliedMigration'
+                  skipped:
+                    type: integer
+                  currentVersion:
+                    type: string
+  /dbops/versions:
+    get:
+      operationId: listVersions
+      summary: 版本台账
+      responses:
+        '200':
+          description: 已应用与待应用版本
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  currentVersion:
+                    type: string
+                  applied:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AppliedMigration'
+                  pending:
+                    type: array
+                    items:
+                      type: string
+  /dbops/rollback:
+    post:
+      operationId: rollback
+      summary: 回滚到指定版本
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [targetVersion]
+              properties:
+                targetVersion:
+                  type: string
+                  description: 回滚目标版本；空串表示全部回滚
+      responses:
+        '200':
+          description: 回滚结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rolledBack:
+                    type: array
+                    items:
+                      type: string
+                  currentVersion:
+                    type: string
+        '400':
+          description: 目标版本不存在或不可回滚
+components:
+  schemas:
+    AppliedMigration:
+      type: object
+      required: [version, description, executedAt]
+      properties:
+        version:
+          type: string
+          description: 版本号，形如 V1_0_0__common_schema
+        description:
+          type: string
+        executedAt:
+          type: string
+          format: date-time
+        success:
+          type: boolean

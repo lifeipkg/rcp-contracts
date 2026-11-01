@@ -1,0 +1,52 @@
+openapi: 3.0.3
+info:
+  title: Risk Control Platform · API Gateway
+  version: 1.0.0
+  description: |
+    平台唯一对外入口。负责幂等（event_id + version）、状态机单调前进、
+    分级处置映射与巡查线降级。前端不得绕过本网关直连任何后端服务。
+servers:
+  - url: http://localhost:8080
+tags:
+  - name: patrol
+paths:
+  /api/v1/patrol/dispatch:
+    post:
+      operationId: dispatchPatrolEvent
+      summary: 提交巡查事件
+      tags: [patrol]
+      description: 幂等受理一个巡查事件，路由到对应巡查线并返回裁决与处置。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/patrol-event.yaml#/request
+      responses:
+        '200':
+          description: 已受理（或幂等拒绝但仍返回结构化结果）
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/patrol-event.yaml#/response
+        '400':
+          description: domain 非法或请求体校验失败
+  /api/v1/patrol/domains:
+    get:
+      operationId: listDomains
+      summary: 平台自描述（巡查线清单）
+      tags: [patrol]
+      responses:
+        '200':
+          description: 巡查线列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  platform:
+                    type: string
+                  patrolLines:
+                    type: array
+                    items:
+                      type: string

@@ -1,0 +1,19 @@
+schema: rcp.contract.schema/v1
+name: Decision
+zh: 决策等级
+type: string
+description: 处置等级枚举，唯一真源为 rcp-core 的 Decision。分值见 rcp-core 的 baseScore。
+enum:
+  - PASS
+  - WARN
+  - LIMIT
+  - EXTRA_REVIEW
+  - INTERCEPT
+  - BAN
+x-base-score:
+  PASS: 0
+  WARN: 20
+  LIMIT: 40
+  EXTRA_REVIEW: 60
+  INTERCEPT: 80
+  BAN: 100

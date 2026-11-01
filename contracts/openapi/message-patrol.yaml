@@ -1,0 +1,46 @@
+openapi: 3.0.3
+info:
+  title: Risk Control Platform · Message Patrol
+  version: 1.0.0
+  description: 消息巡查线。AC 自动机 + 变体归一化 + 角色分级，只被网关调用。
+servers:
+  - url: http://localhost:8082
+paths:
+  /api/v1/patrol/check:
+    post:
+      operationId: checkChatMessage
+      summary: 会话消息命中检测
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [messageId, senderId, senderRole, content]
+              properties:
+                eventId:
+                  type: string
+                messageId:
+                  type: integer
+                  format: int64
+                senderId:
+                  type: integer
+                  format: int64
+                senderRole:
+                  type: string
+                  enum: [RECRUITER, SEEKER]
+                  description: 招聘侧命中拦截，求职侧仅提示（误杀治理）
+                content:
+                  type: string
+                ts:
+                  type: integer
+                  format: int64
+      responses:
+        '200':
+          description: 巡查结论
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/patrol-verdict.yaml
+        '400':
+          description: senderRole 非法或必填缺失

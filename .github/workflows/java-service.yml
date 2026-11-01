@@ -1,0 +1,64 @@
+name: java-service
+
+# 共享 CI 模板：所有 Java 服务仓复用，避免各仓抄同一份流水线。
+# 调用方（服务仓 .github/workflows/ci.yml）：
+#   uses: lifeipkg/rcp-contracts/.github/workflows/java-service.yml@main
+#   with: { service: content-patrol, contract: contracts/openapi/content-patrol.yaml }
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: 服务名，用于报告标识
+        required: true
+        type: string
+      contract:
+        description: 本仓挂的契约文件（相对 rcp-contracts 仓根）
+        required: true
+        type: string
+      core-ref:
+        description: rcp-core 的钉版 ref（升钉须单独提交）
+        required: false
+        type: string
+        default: v1.0.0
+
+jobs:
+  build:
+    name: build · ${{ inputs.service }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出实现仓
+        uses: actions/checkout@v4
+
+      - name: 检出基座（钉版）
+        uses: actions/checkout@v4
+        with:
+          repository: lifeipkg/rcp-core
+          ref: ${{ inputs.core-ref }}
+          path: .deps/rcp-core
+
+      - name: 检出契约仓
+        uses: actions/checkout@v4
+        with:
+          repository: lifeipkg/rcp-contracts
+          path: .deps/rcp-contracts
+
+      - name: JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: 安装基座到本地仓库
+        run: mvn -B -q -f .deps/rcp-core/pom.xml install -DskipTests
+
+      - name: 编译与测试
+        run: mvn -B verify
+
+      - name: 契约→实现 对表
+        run: |
+          python -m pip install --quiet pyyaml
+          python .deps/rcp-contracts/tools/contract_check.py \
+            --repo . \
+            --contract .deps/rcp-contracts/${{ inputs.contract }}
