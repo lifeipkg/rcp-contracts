@@ -11,9 +11,13 @@
 | 红线与例外登记 | 已完成 | `ontology/constraints/redlines.yaml` 的 `RL-007` 与 `exceptions` |
 | 本地编排基础设施 | 已完成 | `rcp-ops/docker-compose.yml` 的 `nacos` 服务 |
 | 集群清单基础设施 | 已完成 | `rcp-ops/k8s/05-nacos.yaml`，已进 `kustomization.yaml` |
-| 配置锚点 | 已完成 | `rcp-ops/k8s/01-configmap.yaml` 的 `NACOS_SERVER` / `NACOS_NAMESPACE` / `NACOS_GROUP` |
+| 部署侧配置注入 | **不需要** | 应用侧占位符默认值即命中 Service 名（见接线第 3 步），K8s 与 compose 均不注入 |
 | 应用侧 discovery 依赖 | **未完成** | 各 Java 服务 `pom.xml` 与 `application.yml` |
 | 网关按服务名寻址 | **未完成** | 仍读 `PATROL_ROUTES_ENDPOINTS_*` |
+
+> 曾加过 `NACOS_SERVER` / `NACOS_NAMESPACE` / `NACOS_GROUP` 三个配置锚点（configmap 与 api-gateway 各一份），
+> 已删除：应用代码不读它们，占位符默认值已够用，留着只会变成两份对不上的真源。
+> 只有换 namespace、跨集群部署或启用鉴权时才需要注入，届时与本表上一行一起改。
 
 ## 为什么停在这里
 
