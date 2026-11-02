@@ -7,6 +7,11 @@ updated: 2026-11-01
 baseline_stack:
   java: "17"
   spring_boot: "3.3.5"
+  # Spring Cloud 与 Spring Cloud Alibaba 的兼容组合经容器内 Maven 构建验证：
+  # Boot 3.3.x -> Spring Cloud 2023.0.x (Leyton) -> SCA 2023.0.3.x（nacos-client 2.4.x，
+  # 配 Nacos Server v2.3.2）。禁止各仓自行抬版本。
+  spring_cloud: "2023.0.3"
+  spring_cloud_alibaba: "2023.0.3.4"
   maven_surefire: "3.2.5"
 
 # 服务发现：消费方按服务名解析地址，不在部署清单里写死上游 URL（见 RL-007）。

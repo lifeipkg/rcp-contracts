@@ -7,28 +7,33 @@
 
 | 项 | 状态 | 位置 |
 |---|---|---|
-| 服务发现声明 | 已完成 | `registry/services.yaml` 的 `discovery` 段，`state: declared` |
+| 服务发现声明 | 已完成 | `registry/services.yaml` 的 `discovery` 段，`state: declared`（见下文"为何停在 declared"） |
+| 基线版本钉定 | 已完成 | `baseline_stack` 增补 `spring_cloud: 2023.0.3`、`spring_cloud_alibaba: 2023.0.3.4`，经 Maven 构建验证可解析 |
 | 红线与例外登记 | 已完成 | `ontology/constraints/redlines.yaml` 的 `RL-007` 与 `exceptions` |
-| 本地编排基础设施 | 已完成 | `rcp-ops/docker-compose.yml` 的 `nacos` 服务 |
+| 本地编排基础设施 | 已完成 | `rcp-ops/docker-compose.yml` 的 `nacos` 服务 + `nacos-init`（一次性创建 risk-control namespace） |
 | 集群清单基础设施 | 已完成 | `rcp-ops/k8s/05-nacos.yaml`，已进 `kustomization.yaml` |
-| 部署侧配置注入 | **不需要** | 应用侧占位符默认值即命中 Service 名（见接线第 3 步），K8s 与 compose 均不注入 |
-| 应用侧 discovery 依赖 | **未完成** | 各 Java 服务 `pom.xml` 与 `application.yml` |
-| 网关按服务名寻址 | **未完成** | 仍读 `PATROL_ROUTES_ENDPOINTS_*` |
+| 应用侧 discovery 依赖 | **已接线（编译+测试验证）** | 7 个 Java 服务 `pom.xml` 引入 `spring-cloud-starter-alibaba-nacos-discovery`，`application.yml` 按 `${NACOS_SERVER:nacos:8848}` 占位符配置；`@SpringBootTest` 显式关闭 discovery（测试环境无注册中心） |
+| 网关按服务名寻址 | **已实现（单测验证）** | `HttpPatrolClient` 先查 `DiscoveryClient`（多实例轮转），注册中心不可用或无实例时回落 `patrol.routes.endpoints`（过渡期仍可由 `PATROL_ROUTES_ENDPOINTS_*` 覆盖，不再是唯一来源） |
+| 运行时标定 | **未完成** | compose 起全平台验证注册与路由（本机 Docker daemon 被安全策略阻止启动） |
+| 收尾 | **未完成** | 标定通过后：`discovery.state` 改 `wired`、删 RL-007 例外、删 compose/configmap/10-api-gateway.yaml 中 12 处写死地址 |
 
+> 部署侧配置注入不需要：占位符默认值即命中 Service 名（compose 服务名与 K8s Service 名均为
+> nacos）。唯一例外是 namespace 必须存在——compose 用 `nacos-init` 幂等创建，K8s 部署时需
+> 同样保证（可加 Job，随收尾一并处理）。
 > 曾加过 `NACOS_SERVER` / `NACOS_NAMESPACE` / `NACOS_GROUP` 三个配置锚点（configmap 与 api-gateway 各一份），
-> 已删除：应用代码不读它们，占位符默认值已够用，留着只会变成两份对不上的真源。
-> 只有换 namespace、跨集群部署或启用鉴权时才需要注入，届时与本表上一行一起改。
+> 已删除：应用代码占位符默认值已够用，留着只会变成两份对不上的真源。
 
 ## 为什么停在这里
 
-三条都是硬约束，不是取舍：
+三条硬约束的当前状态：
 
-1. **依赖不可验证。** 本机无 `mvn` 可执行文件，`~/.m2` 内也没有 `com.alibaba.cloud` 的构件。
-   改动 pom 后无法编译，等于提交一个未验证的运行行为变更。
-2. **无集群可标定。** 本工作区没有真实集群，注册中心接入的正确性（注册延迟、健康检查、
-   名称解析失败时的降级）无法观测。写"已接入"就是自述，不是事实。
-3. **干扰面大。** 接入会同时改 7 个服务仓的 pom 与配置，属高风险轨道，需要独立复核记录；
-   在没有可验证环境时一次铺开，失败面会覆盖整个平台。
+1. ~~依赖不可验证~~ **已解除**：本机已装便携 JDK 17 + Maven 3.9.16（`.workbuddy/tools/`），
+   7 个服务 `mvn test` 全部通过，SCA 2023.0.3.4 依赖解析与编译验证完成。
+2. **无运行时可标定。** 本机 Docker daemon 被安全策略阻止启动（wsl.exe 在黑名单），
+   compose 标定（注册、按名解析、多实例轮转、失败降级）无法执行。解锁后跑
+   `docker compose up --build`，按下方验收命令复核。
+3. **收尾仍需独立复核。** 标定通过后才改 `wired`、删例外、删写死地址——在那之前
+   `state: declared` + RL-007 例外继续如实反映"接线已提交、运行行为未标定"的状态。
 
 因此选择：**先把可机械验证的部分做满**（声明、清单、红线、例外、复审期限），
 把不可验证的部分明确标注为未完成，而不是假装完成。
@@ -64,14 +69,13 @@ exceptions:
 
 ## 接线步骤
 
-按顺序做，每步都有可复算的验收。
+按顺序做，每步都有可复算的验收。第 1-4 步已完成并提交，第 5 步待运行时标定。
 
-1. **钉版本。** 在 `registry/services.yaml` 的 `baseline_stack` 增补
-   `spring_cloud_alibaba: "<钉住的具体版本>"`。此文档不写具体版本号，因为尚未验证兼容性；
-   写入未经验证的版本比留空更糟。
-2. **加依赖。** 7 个 Java 服务仓的 `pom.xml` 加
-   `com.alibaba.cloud:spring-cloud-starter-alibaba-nacos-discovery`，版本引用上一步的 property。
-3. **加配置。** 各服务 `application.yml`：
+1. ~~**钉版本。**~~ 已完成：`baseline_stack` 钉 `spring_cloud: "2023.0.3"`、
+   `spring_cloud_alibaba: "2023.0.3.4"`（与 Boot 3.3.5 兼容，Maven 构建验证）。
+2. ~~**加依赖。**~~ 已完成：7 个 Java 服务仓的 `pom.xml` 引入
+   `com.alibaba.cloud:spring-cloud-starter-alibaba-nacos-discovery`（版本由 BOM 管理）。
+3. ~~**加配置。**~~ 已完成：各服务 `application.yml`：
 
    ```yaml
    spring:
@@ -83,10 +87,13 @@ exceptions:
            group: ${NACOS_GROUP:DEFAULT_GROUP}
    ```
 
-4. **改寻址。** 网关改为按服务名解析上游；`PATROL_ROUTES_ENDPOINTS_*` 若保留，只作为覆盖率覆盖项，
-   不再是唯一来源。
-5. **收尾。** 删除 `discovery.state: declared` 改为 `wired`；删除 `redlines.yaml` 里的 RL-007 例外；
-   删除 compose 与 configmap 中的四条上游地址。
+4. ~~**改寻址。**~~ 已完成：`HttpPatrolClient` 先经 `DiscoveryClient` 按注册名解析
+   （`patrol.routes.services`，多实例轮转），注册中心不可用或无实例时回落
+   `patrol.routes.endpoints`；`PATROL_ROUTES_ENDPOINTS_*` 保留为覆盖/兜底项，
+   收尾后部署侧不再注入。新增 `HttpPatrolClientTest` 覆盖发现优先、多实例轮转、
+   无注册中心回落、注册中心异常回落、未知巡查线拒绝五条路径。
+5. **收尾（待标定通过）。** `discovery.state` 改 `wired`；删除 `redlines.yaml` 里的 RL-007 例外；
+   删除 compose、configmap 与 `10-api-gateway.yaml` 中的四条上游地址（共 12 处）。
 
 ### 验收命令
 
