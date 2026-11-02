@@ -20,14 +20,16 @@ baseline_stack:
 #   wired    —— 服务已引入依赖并按 name 解析，清单中不再出现上游地址
 discovery:
   kind: nacos
-  state: declared
+  state: wired
   server: ${NACOS_SERVER:nacos:8848}
   namespace: risk-control
   group: DEFAULT_GROUP
   fallback: k8s-dns
   note: >-
-    当前路由地址仍由环境变量给出（RL-007 例外已登记在 ontology/constraints/redlines.yaml），
-    未接注册中心是本平台唯一的硬偏离，见 docs/DISCOVERY.md。
+    接线已完成：7 个 Java 服务引入 nacos-discovery 依赖并按占位符注册，
+    网关经 DiscoveryClient 按服务名解析（多实例轮转），endpoints 仅作兜底；
+    清单中不再出现上游地址（RL-007 例外已随收尾删除）。本平台为 demo 定位，
+    未做运行时标定，行为验证以 mvn test 与寻址单测为准，见 docs/DISCOVERY.md。
 
 # 库（非 HTTP 服务）：只被依赖，不登记端口。
 libraries:

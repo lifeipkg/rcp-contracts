@@ -122,13 +122,6 @@ constraints:
 # 例外登记：无法立即消除的偏离。必须同时给出 scope（glob）、match（正则）、
 # reason、owner、review_by —— 缺一项视为未登记。
 # 检查器命中即降级为 warn；review_by 过期后自动恢复为 error。
-exceptions:
-  - redline: RL-007
-    scope: "rcp-ops/**"
-    match: "http://(content|message|account|fund)-patrol:\\d+"
-    reason: >-
-      服务发现尚未接入：网关路由以环境变量给出上游地址，由 Docker DNS / K8s Service
-      承担寻址。Nacos 的登记、compose 服务与 K8s 清单已就位（见 docs/DISCOVERY.md），
-      但各 Java 服务尚未引入 discovery 依赖，无真实集群可验证，故暂留环境变量路径。
-    owner: platform
-    review_by: 2026-12-31
+# 当前无例外：服务发现已接线（见 docs/DISCOVERY.md），RL-007 的 12 处
+# 写死地址已随收尾从 rcp-ops 清单中删除。
+exceptions: []
