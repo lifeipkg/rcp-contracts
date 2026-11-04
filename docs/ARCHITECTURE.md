@@ -81,7 +81,7 @@ POST /api/v1/patrol/dispatch          # 网关唯一入口
 
 **决策枚举（全平台统一）**：`PASS → WARN → LIMIT → EXTRA_REVIEW → INTERCEPT → BAN`
 （状态机只允许沿此序单调前进，回跳拒绝）。枚举三处必须逐字一致：`rcp-core` 的 `Decision`、
-`rcp-contracts/contracts/schemas/decision.yaml`、`rcp-ontology/concepts/decisions.yaml`（红线 RL-003）。
+`rcp-contracts/contracts/schemas/decision.yaml`、`rcp-ontology/concepts/tbox.ttl` 的决策个体（红线 RL-003）。
 
 ## 4. 巡查线业务规则速览
 

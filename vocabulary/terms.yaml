@@ -1,8 +1,9 @@
 schema: rcp.vocabulary/v1
 # 平台立名词汇表。新概念先在此立名，再进契约与实现；同一概念禁止多套叫法。
 #
-# covers：该术语覆盖的 TBox 种类（kind）。W303 按它判断"种类有没有立名"，
-# 新增 kind 必须同时在这里挂一个术语，否则检查器报警。
+# covers：该术语覆盖的 TBox 种类（kind）。**仅作人造对照，当前没有检查器读它**
+# ——原 W303（种类未立名）已随 SHACL 迁移裁掉，种类定义由 concepts/tbox.ttl 唯一承载。
+# 保留 covers 是为了让"业务叫法 → 种类"的映射在文档里有落点；不要指望它报错。
 terms:
   - term: patrol_event
     zh: 巡查事件
