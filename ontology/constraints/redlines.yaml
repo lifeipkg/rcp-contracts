@@ -2,7 +2,7 @@ schema: rcp.constraints/v1
 # 架构红线：可机械检查的硬约束。由 rcp-ontology 的 check 校验，违反即红。
 #
 # spec：机器可读的检查规格（policy-as-code）。type 决定执行器，其余字段是执行参数：
-#   registry-assert  登记断言，判定由 kinds.yaml 属性承载（via 指明属性）
+#   registry-assert  登记断言，判定由 TBox 种类属性承载（concepts/tbox.ttl，via 指明属性）
 #   cross-source     跨源逐字比对（决策枚举、分值等）
 #   file-scan        文件系统扫描（RL-004：DDL 落位）
 #   registry-scan    按登记遍历仓并抽取依赖（RL-005：JDBC 引入）
@@ -45,7 +45,7 @@ constraints:
       sources:
         - path: contracts/schemas/decision.yaml
           field: enum
-        - path: concepts/decisions.yaml
+        - path: concepts/tbox.ttl
           list: enum
           key: code
       assert: identical

@@ -52,7 +52,7 @@ python ../rcp-ontology/rcp_ontology/cli.py owners --contracts . --org your-org -
 2. 新增服务 → 先在 `services.ttl` 登记（`a rcp:<Kind>, rcp:Service` + `rcp:repo` / `rcp:port` / `rcp:owner` / 能力 / 契约），再挂契约，最后写实现（否则 RL-006 红）；
 3. 新增仓 → 先在 `services.ttl` 登记（`a rcp:Meta` 用于不部署的元仓），否则 E107 红——
    "目录存在但未登记"在任何环境下都判错，这是多人协作时最容易漏的一步；
-4. 新增种类（kind）→ 先在 `rcp-ontology/concepts/kinds.yaml` 声明，且**四个布尔属性必须写全**
+4. 新增种类（kind）→ 先在 `rcp-ontology/concepts/tbox.ttl` 声明，且**四个布尔属性必须写全**
    （`must_be_external` / `is_entry` / `requires_port` / `requires_contract`），
    再在 `terms.yaml` 挂一个带 `covers` 的术语（否则 E113 / W303 红）；
 5. 改决策等级 → 只改 `contracts/schemas/decision.yaml` 与 `rcp-core` 的 `Decision`，枚举与分值两侧必须逐字一致（RL-003）；
