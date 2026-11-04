@@ -4,7 +4,7 @@
 >
 > **读者**：主业务侧研发（看第 2、3 章）、风控平台研发（看第 1、2.2、2.5 章）、技术与业务决策者（看第 0、2.1、4 章）。
 >
-> **事实基准**：`rcp-contracts/registry/services.yaml`、`contracts/schemas/*`、`ontology/constraints/redlines.yaml`、`rcp-ops/migrations/*`。凡标注「设计建议」的内容尚未落地，不得当作现状引用。
+> **事实基准**：`rcp-contracts/registry/services.ttl`、`contracts/schemas/*`、`ontology/constraints/redlines.yaml`、`rcp-ops/migrations/*`。凡标注「设计建议」的内容尚未落地，不得当作现状引用。
 >
 > **边界声明**：本工作区是架构演示工作区，含契约、代码与部署清单，**不含真实集群与生产发布**。文中不声称任何环境已上线。
 

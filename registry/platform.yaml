@@ -1,0 +1,33 @@
+schema: rcp.platform/v1
+# 平台级配置：版本钉与服务发现。这两段不是图事实——没有实例、没有边、不参与
+# 推理，写成三元组只会让"版本号"变成字面量，反而失去 grep 的可用性。
+# 与图有关的登记（服务、库、边、预期状态）在 registry/services.ttl。
+
+# 平台基座版本真源：服务侧必须对齐，禁止各仓自行抬版本。
+# 消费方式（工作区根目录）：grep -A6 '^baseline_stack:' rcp-contracts/registry/platform.yaml
+baseline_stack:
+  java: "17"
+  spring_boot: "3.3.5"
+  # Spring Cloud 与 Spring Cloud Alibaba 的兼容组合经容器内 Maven 构建验证：
+  # Boot 3.3.x -> Spring Cloud 2023.0.x (Leyton) -> SCA 2023.0.3.x（nacos-client 2.4.x，
+  # 配 Nacos Server v2.3.2）。禁止各仓自行抬版本。
+  spring_cloud: "2023.0.3"
+  spring_cloud_alibaba: "2023.0.3.4"
+  maven_surefire: "3.2.5"
+
+# 服务发现：消费方按服务名解析地址，不在部署清单里写死上游 URL（见 RL-007）。
+# state 取值：
+#   declared —— 形态已声明、基础设施清单已就位，Java 侧尚未引入 discovery 依赖
+#   wired    —— 服务已引入依赖并按 name 解析，清单中不再出现上游地址
+discovery:
+  kind: nacos
+  state: wired
+  server: ${NACOS_SERVER:nacos:8848}
+  namespace: risk-control
+  group: DEFAULT_GROUP
+  fallback: k8s-dns
+  note: >-
+    接线已完成：7 个 Java 服务引入 nacos-discovery 依赖并按占位符注册，
+    网关经 DiscoveryClient 按服务名解析（多实例轮转），endpoints 仅作兜底；
+    清单中不再出现上游地址（RL-007 例外已随收尾删除）。本平台为 demo 定位，
+    未做运行时标定，行为验证以 mvn test 与寻址单测为准，见 docs/DISCOVERY.md。
