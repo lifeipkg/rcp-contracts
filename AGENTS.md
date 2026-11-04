@@ -9,7 +9,7 @@
 ## 三条本仓硬约束
 
 1. **只做声明，不做实现。** 本仓不出现 Java/Python 业务代码（`tools/` 的检查脚本除外），也不出现 DDL。
-2. **登记先于实现。** 新服务先登记 `registry/services.yaml` 并挂契约，实现仓才允许开工；未登记即 RL-006 红。
+2. **登记先于实现。** 新服务先登记 `registry/services.ttl` 并挂契约，实现仓才允许开工；未登记即 RL-006 红。
 3. **改契约必须与消费仓同批升钉。** 契约变更单独提交（`contract:` 前缀），消费仓的 `core-ref` / 契约引用随同一次变更更新，不允许契约先漂、实现后补。
 4. **偏离必须登记，不能只在文档里说明。** 无法立即消除的违线放在 `redlines.yaml` 的 `exceptions`，
    写全 `scope`/`match`/`reason`/`owner`/`review_by`；否则检查器照常判红。
@@ -18,6 +18,7 @@
 
 ```bash
 # 1) YAML 严格解析（重复键即失败，PyYAML 默认会静默取后者）
+#    登记图是 TTL，RDF 里"重复"表现为功能属性多值，由第 2 步在装载期报错。
 python ../rcp-ops/tools/check_manifests.py .
 
 # 2) 本体一致性（登记 / 契约 / 红线 / 仓布局）

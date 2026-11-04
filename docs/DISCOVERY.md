@@ -8,7 +8,7 @@
 
 | 项 | 状态 | 位置 |
 |---|---|---|
-| 服务发现声明 | 已完成 | `registry/services.yaml` 的 `discovery` 段，`state: wired` |
+| 服务发现声明 | 已完成 | `registry/platform.yaml` 的 `discovery` 段，`state: wired` |
 | 基线版本钉定 | 已完成 | `baseline_stack`：`spring_cloud: "2023.0.3"`、`spring_cloud_alibaba: "2023.0.3.4"`（Maven 构建验证与 Boot 3.3.5 兼容） |
 | 红线 | 已完成 | RL-007 生效中，`exceptions: []`，无任何例外 |
 | 本地编排基础设施 | 已完成 | `rcp-ops/docker-compose.yml` 的 `nacos` 服务 + `nacos-init`（一次性幂等创建 risk-control namespace） |

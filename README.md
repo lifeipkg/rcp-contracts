@@ -8,7 +8,8 @@
 
 | 路径 | 是什么 |
 |---|---|
-| `registry/services.yaml` | 服务登记：名称、端口、owner、能力、依赖、健康检查、挂的契约。也是 `baseline_stack` 版本真源与服务发现（`discovery` 段）声明处。`kind: meta` 的条目是元仓（本仓、本体仓、ops），无端口不挂契约，登记它们是为了让 owner 与仓边界有唯一出处 |
+| `registry/services.ttl` | 服务登记（RDF 图真源）：实例 IRI 即服务名，`rdf:type` 即种类，具体关系边（`calls` / `queries` …）直接是可推理的三元组。图无实例顺序，条目按名称排列。`a rcp:Meta` 的是元仓（本仓、本体仓、ops），无端口不挂契约，登记它们是为了让 owner 与仓边界有唯一出处 |
+| `registry/platform.yaml` | 与图无关的平台配置：`baseline_stack` 版本真源与服务发现（`discovery` 段）。刻意不写成三元组——版本号没有图语义，写成字面量反而失去 grep 的可用性 |
 | `contracts/openapi/*.yaml` | 各服务对外 HTTP 契约（OpenAPI 3.0.3） |
 | `contracts/schemas/*.yaml` | 跨服务共享结构（决策、结论、事件），禁止各服务内联复制 |
 | `vocabulary/terms.yaml` | 平台立名词汇表，新概念先立名。`covers` 字段挂到 TBox 种类，W303 按它判断"种类有没有立名" |
@@ -23,7 +24,7 @@
 
 ```bash
 # 版本真源
-grep -A6 '^baseline_stack:' registry/services.yaml
+grep -A6 '^baseline_stack:' registry/platform.yaml
 
 # 契约→实现对表（在实现仓根目录跑，差集非空即未闭合）
 python ../rcp-contracts/tools/contract_check.py \
@@ -48,8 +49,8 @@ python ../rcp-ontology/rcp_ontology/cli.py owners --contracts . --org your-org -
 ## 变更纪律
 
 1. 改契约 → 先改本仓 → 消费仓升钉 → CI 对表闭合；
-2. 新增服务 → 先登记 `services.yaml`，再挂契约，最后写实现（否则 RL-006 红）；
-3. 新增仓 → 先在 `services.yaml` 登记（`kind: meta` 用于不部署的元仓），否则 E107 红——
+2. 新增服务 → 先在 `services.ttl` 登记（`a rcp:<Kind>, rcp:Service` + `rcp:repo` / `rcp:port` / `rcp:owner` / 能力 / 契约），再挂契约，最后写实现（否则 RL-006 红）；
+3. 新增仓 → 先在 `services.ttl` 登记（`a rcp:Meta` 用于不部署的元仓），否则 E107 红——
    "目录存在但未登记"在任何环境下都判错，这是多人协作时最容易漏的一步；
 4. 新增种类（kind）→ 先在 `rcp-ontology/concepts/kinds.yaml` 声明，且**四个布尔属性必须写全**
    （`must_be_external` / `is_entry` / `requires_port` / `requires_contract`），
