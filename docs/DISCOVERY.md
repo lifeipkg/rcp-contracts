@@ -8,7 +8,7 @@
 
 | 项 | 状态 | 位置 |
 |---|---|---|
-| 服务发现声明 | 已完成 | `registry/platform.yaml` 的 `discovery` 段，`state: wired` |
+| 服务发现声明 | 已完成 | `rcp-ontology/ontology/abox/platform.ttl` 的 `rcp:discovery` 结构，`rcp:discoveryState "wired"` |
 | 基线版本钉定 | 已完成 | `baseline_stack`：`spring_cloud: "2023.0.3"`、`spring_cloud_alibaba: "2023.0.3.4"`（Maven 构建验证与 Boot 3.3.5 兼容） |
 | 红线 | 已完成 | RL-007 生效中，`exceptions: []`，无任何例外 |
 | 本地编排基础设施 | 已完成 | `rcp-ops/docker-compose.yml` 的 `nacos` 服务 + `nacos-init`（一次性幂等创建 risk-control namespace） |
@@ -46,7 +46,7 @@
    （`patrol.routes.services`，多实例轮转），注册中心不可用或无实例时回落
    `patrol.routes.endpoints`。新增 `HttpPatrolClientTest` 覆盖发现优先、多实例轮转、
    无注册中心回落、注册中心异常回落、未知巡查线拒绝五条路径。
-5. **收尾。** `discovery.state` 改 `wired`；删除 `redlines.yaml` 的 RL-007 例外；
+5. **收尾。** `rcp:discoveryState` 改 `"wired"`；删除 `policy/redlines.ttl` 的 RL-007 例外；
    删除 compose、configmap 与 `10-api-gateway.yaml` 中的 12 处写死地址。
 
 ### 验证依据
