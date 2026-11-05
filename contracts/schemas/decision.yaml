@@ -2,7 +2,9 @@ schema: rcp.contract.schema/v1
 name: Decision
 zh: 决策等级
 type: string
-description: 处置等级枚举，唯一真源为 rcp-core 的 Decision。分值见 rcp-core 的 baseScore。
+# 生成物，勿手改：由 rcp-ontology 的 `cli.py render-schema` 从
+# rcp-ontology/ontology/tbox/decisions.ttl 产出。改真源后重跑命令。
+description: 处置等级枚举，唯一真源为 rcp-ontology/ontology/tbox/decisions.ttl。分值见 rcp:baseScore。
 enum:
   - PASS
   - WARN

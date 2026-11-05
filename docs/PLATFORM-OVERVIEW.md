@@ -4,7 +4,7 @@
 >
 > **读者**：主业务侧研发（看第 2、3 章）、风控平台研发（看第 1、2.2、2.5 章）、技术与业务决策者（看第 0、2.1、4 章）。
 >
-> **事实基准**：`rcp-contracts/registry/services.ttl`、`contracts/schemas/*`、`ontology/constraints/redlines.yaml`、`rcp-ops/migrations/*`。凡标注「设计建议」的内容尚未落地，不得当作现状引用。
+> **事实基准**：`rcp-ontology/ontology/`（`abox/services.ttl`、`policy/redlines.ttl`、`tbox/*.ttl`）、`rcp-contracts/contracts/schemas/*`、`rcp-ops/migrations/*`。凡标注「设计建议」的内容尚未落地，不得当作现状引用。
 >
 > **边界声明**：本工作区是架构演示工作区，含契约、代码与部署清单，**不含真实集群与生产发布**。文中不声称任何环境已上线。
 
@@ -389,7 +389,7 @@ auditLog.save(event.getEventId(), v.getDecision(), v.getReason());
 
 | 项 | 状态 | 影响 |
 |---|---|---|
-| 服务注册中心 | **缺失（唯一硬偏离）** | 网关路由由配置给出、K8s 用 Service DNS 覆盖，与"不写死上游地址"原则不符，需在 `redlines.yaml` 登记例外或后续接入服务发现 |
+| 服务注册中心 | **缺失（唯一硬偏离）** | 网关路由由配置给出、K8s 用 Service DNS 覆盖，与"不写死上游地址"原则不符，需在 `policy/redlines.ttl` 登记例外或后续接入服务发现 |
 | 幂等与状态机存储 | 进程内 Map | 网关重启丢状态，重放保护失效；表结构已备（`patrol_idempotent` / `patrol_object_state`） |
 | 处置回执接口 | 未实现 | 处置生效数、误杀率不可算 |
 | 名单下发/订阅 | 未实现 | 读路径只能实时判或完全不判，同步依赖偏重 |
@@ -408,10 +408,10 @@ auditLog.save(event.getEventId(), v.getDecision(), v.getReason());
 | 巡查事件 patrol_event | 进入平台统一入口的一次业务事实，以 `event_id + version` 唯一标识 | platform |
 | 巡查线 patrol_line | 按业务域切分的判定单元：content / message / account / fund | platform |
 | 巡查结论 patrol_verdict | 单条巡查线对事件的统一结论，含决策、风险分、原因、明细 | rcp-core |
-| 决策 decision | 处置等级枚举，唯一真源为 `rcp-core` 的 `Decision` | rcp-core |
+| 决策 decision | 处置等级枚举，唯一真源为 `rcp-ontology/ontology/tbox/decisions.ttl` | rcp-ontology |
 | 分级处置 disposition | 由网关按决策等级映射出的执行动作 | api-gateway |
 | 幂等键 idempotency_key | `event_id + version`；同键重放不产生新裁决，旧版本被拒绝 | api-gateway |
 | PDP / PEP | 决策点 / 执行点。本平台是 PDP，主业务是 PEP | 本文引入 |
 | 待审落库 | 用业务状态表达判定不确定性，而非用异常 | 本文引入 |
 
-> 新增术语须先在 `rcp-contracts/vocabulary/terms.yaml` 立名，再进入契约与实现；同一概念禁止多套叫法。
+> 新增术语须先在 `rcp-ontology/ontology/tbox/terms.ttl` 立名，再进入契约与实现；同一概念禁止多套叫法。
