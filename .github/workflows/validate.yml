@@ -43,7 +43,7 @@ jobs:
 
       - name: 契约·登记·红线 一致性检查
         run: |
-          python .deps/rcp-ontology/rcp_ontology/cli.py check --contracts . --workspace .
+          python .deps/rcp-ontology/checker/cli.py check --contracts . --workspace .
           # 单仓 CI 里跨仓判定不可用，检查器会输出 S001 明示跳过。
           # 不在这里加 --require-workspace：CI 只检出本仓，加了必然失败。
           # 跨仓结论的权威位置是多仓工作区的 build_all。

@@ -35,10 +35,10 @@ python tools/contract_lint.py --contracts . --baseline origin/main
 python -m pytest -q tests
 
 # 重新生成决策 schema（改了本体仓的 decisions.ttl 之后必须重跑）
-python ../rcp-ontology/rcp_ontology/cli.py render-schema --contracts .
+python ../rcp-ontology/checker/cli.py render-schema --contracts .
 
 # 全量一致性（登记 / 契约 / 红线 / 仓布局 / 依赖图；--workspace 不可省）
-python ../rcp-ontology/rcp_ontology/cli.py check --contracts . -w ..
+python ../rcp-ontology/checker/cli.py check --contracts . -w ..
 ```
 
 ## 变更纪律
