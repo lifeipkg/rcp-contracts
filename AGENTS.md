@@ -28,7 +28,7 @@
 python ../rcp-ops/tools/check_manifests.py .
 
 # 2) 本体一致性（登记 / 契约 / 红线 / 仓布局）
-python ../rcp-ontology/rcp_ontology/cli.py check --contracts . -w ..
+python ../rcp-ontology/checker/cli.py check --contracts . -w ..
 
 # 3) 契约层静态检查（$ref / 决策未内联 / 与基线无破坏性变更）
 python tools/contract_lint.py --contracts . --baseline origin/main
@@ -40,7 +40,7 @@ python -m pytest -q tests
 python tools/contract_check.py --repo ../rcp-content-patrol --contract contracts/openapi/content-patrol.yaml
 
 # 6) 决策 schema 与真源一致（生成物被手改即红）
-python ../rcp-ontology/rcp_ontology/cli.py check --contracts . -w ..
+python ../rcp-ontology/checker/cli.py check --contracts . -w ..
 ```
 
 六条都过才算闭合。差集非空时**报告缺口清单**，不允许改契约迎合实现（那等于把 bug 写进真源）。

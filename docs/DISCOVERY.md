@@ -62,7 +62,7 @@
 
 ```bash
 # 本体 + 红线（含 repo-layout 级）
-python rcp-ontology/rcp_ontology/cli.py check --contracts rcp-contracts --workspace .
+python rcp-ontology/checker/cli.py check --contracts rcp-contracts --workspace .
 
 # 契约层（引用可解析 / 决策未内联 / 与基线无破坏性变更）
 python rcp-contracts/tools/contract_lint.py --contracts rcp-contracts --baseline origin/main
