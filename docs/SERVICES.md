@@ -1,4 +1,7 @@
 # 平台服务目录（由 rcp-ontology 渲染，勿手改）
+#
+# 真源：rcp-ontology/ontology/abox/services.ttl（服务/库/边）、abox/platform.ttl（基座版本钉）。
+# 改登记请改 TTL 后重跑 checker/cli.py render；本文件不是声明真源。
 
 基座版本：java 17 / spring_boot 3.3.5 / spring_cloud 2023.0.3 / spring_cloud_alibaba 2023.0.3.4 / maven_surefire 3.2.5
 
