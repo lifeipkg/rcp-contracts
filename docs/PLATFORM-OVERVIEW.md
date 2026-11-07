@@ -4,7 +4,7 @@
 >
 > **读者**：主业务侧研发（看第 2、3 章）、风控平台研发（看第 1、2.2、2.5 章）、技术与业务决策者（看第 0、2.1、4 章）。
 >
-> **事实基准**：`rcp-ontology/ontology/`（`abox/services.ttl`、`policy/redlines.ttl`、`tbox/*.ttl`）、`rcp-contracts/contracts/schemas/*`、`rcp-ops/migrations/*`。凡标注「设计建议」的内容尚未落地，不得当作现状引用。
+> **事实基准**：`rcp-ontology/ontology/` 四层 TTL（`tbox/*.ttl`、`abox/services.ttl`、`abox/platform.ttl`、`policy/redlines.ttl`、`shapes/core.ttl`）—— 声明层唯一真源；`rcp-contracts/contracts/*` 是接口契约与生成物；`rcp-ops/migrations/*` 是 DDL 真源。凡标注「设计建议」的内容尚未落地，不得当作现状引用。
 >
 > **边界声明**：本工作区是架构演示工作区，含契约、代码与部署清单，**不含真实集群与生产发布**。文中不声称任何环境已上线。
 
@@ -22,7 +22,7 @@
 | 2 | **业务库是唯一真源，风控只读** | 风控不写主业务库、不持有岗位/用户/资金流水的主数据，只保存"裁决、规则、名单、复核"四类自有数据 |
 | 3 | **同步判定只设在不可逆写入口** | 发布岗位、发消息、注册、放款前同步判定；列表刷新、统计、检索等读路径不做实时判定，靠"名单前置 + 发布时拦截"覆盖 |
 | 4 | **失败语义按域分档，且必须写进契约** | 资金与账号不放过（fail-closed / 转人工加审），内容转待审落库，消息降级放行并异步补判（fail-open） |
-| 5 | **跨系统只认契约，不认枚举值** | 主业务不得硬编码 `PASS/LIMIT/BAN` 等取值，只能 `$ref` 契约仓的 `decision.yaml`；字段变更先改契约再改两侧实现 |
+| 5 | **跨系统只认契约，不认枚举值** | 主业务不得硬编码 `PASS/LIMIT/BAN` 等取值，只能 `$ref` 契约仓的 `decision.yaml`（生成物）；字段变更先改唯一真源 `rcp-ontology/ontology/tbox/decisions.ttl`，重跑 `render-schema` 更新生成物，再改两侧实现 |
 
 关系形态的最终选择是：**以同步决策服务为主干（当前形态），异步事件补判为兜底，演进方向为事件总线 + 特征平台**（见 2.1、第 4 章）。
 
@@ -103,7 +103,7 @@ flowchart TB
 
 这五个机制是平台能被称为"中台"而非"四个脚本服务"的原因，也是它与主业务对接时不产生额外协调成本的关键。
 
-1. **统一契约**。所有风险判定收敛为一个入口 `POST /api/v1/patrol/dispatch`，请求含 `eventId / domain / version / payload`，响应含 `verdict / disposition`。新增一类风险 = 新增一个服务仓 + 契约仓登记一行 + 挂一份 OpenAPI，主业务侧接入代码形态不变。
+1. **统一契约**。所有风险判定收敛为一个入口 `POST /api/v1/patrol/dispatch`，请求含 `eventId / domain / version / payload`，响应含 `verdict / disposition`。新增一类风险 = 新增一个服务仓 + 在 `rcp-ontology/ontology/abox/services.ttl` 登记 + 在契约仓挂一份 OpenAPI，主业务侧接入代码形态不变。
 2. **消费幂等**。`eventId + version` 为幂等键：同键同版本重放不再产生新裁决，旧版本回放直接拒绝（`STALE_VERSION`）。这让主业务可以安全重试，而不必担心重复判定导致风险分叠加。
 3. **状态机单调前进**。决策按 `PASS → WARN → LIMIT → EXTRA_REVIEW → INTERCEPT → BAN` 只升不降，回跳被拦截并置 `stateRollbackProtected=true`。防的是乱序消息把已封禁对象"刷回"通过。
 4. **分级处置**。决策等级到落地动作的映射集中一处，业务侧只按动作分支执行，不必理解每条线的评分逻辑。

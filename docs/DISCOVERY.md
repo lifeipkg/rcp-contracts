@@ -9,8 +9,8 @@
 | 项 | 状态 | 位置 |
 |---|---|---|
 | 服务发现声明 | 已完成 | `rcp-ontology/ontology/abox/platform.ttl` 的 `rcp:discovery` 结构，`rcp:discoveryState "wired"` |
-| 基线版本钉定 | 已完成 | `baseline_stack`：`spring_cloud: "2023.0.3"`、`spring_cloud_alibaba: "2023.0.3.4"`（Maven 构建验证与 Boot 3.3.5 兼容） |
-| 红线 | 已完成 | RL-007 生效中，`exceptions: []`，无任何例外 |
+| 基线版本钉定 | 已完成 | `rcp-ontology/ontology/abox/platform.ttl` 的 `rcp:stack`：`spring_cloud: "2023.0.3"`、`spring_cloud_alibaba: "2023.0.3.4"`（Maven 构建验证与 Boot 3.3.5 兼容）；版本真源已随纯 TTL 重构从契约仓迁至本体仓 |
+| 红线 | 已完成 | RL-007 生效中，`policy/redlines.ttl` 的「例外登记」为空，无任何例外 |
 | 本地编排基础设施 | 已完成 | `rcp-ops/docker-compose.yml` 的 `nacos` 服务 + `nacos-init`（一次性幂等创建 risk-control namespace） |
 | 集群清单基础设施 | 已完成 | `rcp-ops/k8s/05-nacos.yaml`，已进 `kustomization.yaml` |
 | 应用侧 discovery 依赖 | 已接线 | 7 个 Java 服务 `pom.xml` 引入 `spring-cloud-starter-alibaba-nacos-discovery`，`application.yml` 按 `${NACOS_SERVER:nacos:8848}` 占位符配置；`@SpringBootTest` 显式关闭 discovery（测试环境无注册中心） |
@@ -26,8 +26,8 @@
 
 ## 接线过程（5 步，全部完成）
 
-1. **钉版本。** `baseline_stack` 钉 `spring_cloud: "2023.0.3"`、
-   `spring_cloud_alibaba: "2023.0.3.4"`（nacos-client 2.4.x，配 Nacos Server v2.3.2）。
+1. **钉版本。** 在 `rcp-ontology/ontology/abox/platform.ttl` 的 `rcp:stack` 钉
+   `spring_cloud: "2023.0.3"`、`spring_cloud_alibaba: "2023.0.3.4"`（nacos-client 2.4.x，配 Nacos Server v2.3.2）。
 2. **加依赖。** 7 个 Java 服务仓的 `pom.xml` 引入
    `com.alibaba.cloud:spring-cloud-starter-alibaba-nacos-discovery`（版本由 BOM 管理）。
 3. **加配置。** 各服务 `application.yml`：

@@ -54,8 +54,8 @@ flowchart TB
     DBO -->|只执行 DDL| DB
 
     subgraph 声明层
-        CT[rcp-contracts<br/>登记 / OpenAPI / 红线]
-        ON[rcp-ontology<br/>TBox + 检查器]
+        ON[rcp-ontology<br/>四层 TTL 唯一真源 + 检查器]
+        CT[rcp-contracts<br/>OpenAPI / 生成物 schema]
     end
     ON -.校验.-> CT
     CT -.契约先行.-> G
@@ -63,7 +63,7 @@ flowchart TB
 
 ## 3. 统一契约
 
-平台只有一个巡查契约，新增巡查线 = 新增一个服务仓 + 在契约仓登记一行 + 挂一份 OpenAPI：
+平台只有一个巡查契约，新增巡查线 = 新增一个服务仓 + 在 `rcp-ontology/ontology/abox/services.ttl` 登记 + 挂一份 OpenAPI：
 
 ```
 POST /api/v1/patrol/dispatch          # 网关唯一入口
@@ -80,8 +80,7 @@ POST /api/v1/patrol/dispatch          # 网关唯一入口
 `PatrolVerdict { eventId, decision, score, reason, detail }`。
 
 **决策枚举（全平台统一）**：`PASS → WARN → LIMIT → EXTRA_REVIEW → INTERCEPT → BAN`
-（状态机只允许沿此序单调前进，回跳拒绝）。枚举三处必须逐字一致：`rcp-core` 的 `Decision`、
-`rcp-ontology/ontology/tbox/decisions.ttl`（唯一真源）、`rcp-core` 的 `Decision`、由真源生成的 `rcp-contracts/contracts/schemas/decision.yaml`（红线 RL-003）。
+（状态机只允许沿此序单调前进，回跳拒绝）。枚举三处必须逐字一致：`rcp-ontology/ontology/tbox/decisions.ttl`（唯一真源）、`rcp-core` 的 `Decision`（实现）、由真源 `render-schema` 生成的 `rcp-contracts/contracts/schemas/decision.yaml`（生成物）。三者不一致即 RL-003 判红，生成物禁止手改。
 
 ## 4. 巡查线业务规则速览
 
