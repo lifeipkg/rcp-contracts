@@ -1,0 +1,339 @@
+openapi: 3.0.3
+info:
+  title: Risk Control Platform · IAM
+  version: 1.0.0
+  description: |
+    身份与访问管理（IAM）：用户、登录会话、令牌内省与角色授予。
+
+    边界：
+      - 本服务 external=false，只允许经 api-gateway 的 /api/v1/iam/** 透传访问；
+        前端不得直连 8085（RL-002）。
+      - 令牌是不透明 Bearer 令牌，由 IAM 签发并保存会话；下游服务不解析令牌，
+        只用 /introspect 判定有效性。这样"令牌语义"只有这一处，换了形态不必改下游。
+
+    角色与权限：
+      ADMIN     → patrol:dispatch, iam:users
+      OPERATOR  → patrol:dispatch
+      VIEWER    → （无）
+    网关按 /introspect 返回的 permissions 判定，不在网关另写角色表。
+
+    实现：Go + Gin，平台唯一 IAM。会话与用户持久化到 PostgreSQL，但本仓不持数据库
+    驱动、不直连（RL-005）：只读经 dataway 的 /dataway/query，写入经 /dataway/execute
+    的服务端模板；DDL 只在 rcp-ops/migrations（RL-004）。dataway 不可用时服务
+    fail closed 返回 503，不降级放行。
+servers:
+  - url: http://localhost:8085
+tags:
+  - name: auth
+    description: 登录、登出、内省与当前用户
+  - name: users
+    description: 用户与角色管理（仅 ADMIN；改密允许本人）
+paths:
+  /api/v1/iam/login:
+    post:
+      operationId: login
+      summary: 用户名口令登录
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: 登录成功，返回不透明 Bearer 令牌
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: 请求体校验失败
+        '401':
+          description: 用户名或口令错误，或账号已停用
+  /api/v1/iam/logout:
+    post:
+      operationId: logout
+      summary: 登出并吊销当前令牌
+      tags: [auth]
+      responses:
+        '204':
+          description: 已吊销（令牌缺失或已失效同样返回 204，不泄露令牌状态）
+  /api/v1/iam/introspect:
+    post:
+      operationId: introspectToken
+      summary: 令牌内省
+      tags: [auth]
+      description: |
+        判定令牌是否有效并返回角色与权限。供 api-gateway 逐请求调用（当前实现）。
+        无效/过期/已吊销一律返回 200 + active=false，不以 401 区分，避免调用方把
+        "令牌无效"与"内省服务不可用"混为一谈。
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntrospectRequest'
+      responses:
+        '200':
+          description: 内省结果（active 为 false 时其余字段缺省）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntrospectResponse'
+        '400':
+          description: 请求体校验失败
+  /api/v1/iam/me:
+    get:
+      operationId: currentUser
+      summary: 当前登录用户
+      tags: [auth]
+      responses:
+        '200':
+          description: 令牌对应用户
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: 令牌缺失、无效或已吊销
+  /api/v1/iam/users:
+    get:
+      operationId: listUsers
+      summary: 用户列表
+      tags: [users]
+      responses:
+        '200':
+          description: 全部用户（不含口令材料）
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        '401':
+          description: 令牌缺失、无效或已吊销
+        '403':
+          description: 非 ADMIN
+    post:
+      operationId: createUser
+      summary: 新建用户
+      tags: [users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: 已创建
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: 请求体校验失败或口令不满足强度要求
+        '401':
+          description: 令牌缺失、无效或已吊销
+        '403':
+          description: 非 ADMIN
+        '409':
+          description: 用户名已存在
+  /api/v1/iam/users/{userId}:
+    put:
+      operationId: updateUser
+      summary: 更新用户的显示名、角色与状态
+      tags: [users]
+      description: |
+        整体更新：role 与 status 必填，未提供 displayName 时清空为用户名。
+        不允许把最后一个启用状态的 ADMIN 降级或停用（返回 409 LAST_ADMIN），
+        否则平台会失去用户管理入口。停用某用户会同时吊销其全部会话。
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: 已更新
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: 请求体校验失败
+        '401':
+          description: 令牌缺失、无效或已吊销
+        '403':
+          description: 非 ADMIN
+        '404':
+          description: 用户不存在
+        '409':
+          description: 会移除最后一个启用状态的 ADMIN
+  /api/v1/iam/users/{userId}/password:
+    put:
+      operationId: changePassword
+      summary: 修改或重置口令
+      tags: [users]
+      description: |
+        本人修改必须提供 oldPassword；ADMIN 重置他人可不提供。
+        成功后该用户所有会话立即失效（含本次调用所用令牌），需重新登录。
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '204':
+          description: 已修改，相关会话已吊销
+        '400':
+          description: 请求体校验失败或口令强度不足
+        '401':
+          description: 令牌缺失、无效、已吊销，或原口令错误
+        '403':
+          description: 既非本人也非 ADMIN
+        '404':
+          description: 用户不存在
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: 不透明令牌（由 /login 签发），非 JWT。
+  schemas:
+    User:
+      type: object
+      required: [userId, username, displayName, role, status, createdAt]
+      properties:
+        userId:
+          type: string
+          example: usr_3f2a9c
+        username:
+          type: string
+          example: operator
+        displayName:
+          type: string
+          example: 风控运营
+        role:
+          type: string
+          enum: [ADMIN, OPERATOR, VIEWER]
+        status:
+          type: string
+          enum: [ACTIVE, DISABLED]
+        createdAt:
+          type: string
+          format: date-time
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 64
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+    LoginResponse:
+      type: object
+      required: [accessToken, tokenType, expiresIn, user]
+      properties:
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+          example: Bearer
+        expiresIn:
+          type: integer
+          description: 令牌有效期（秒）
+          example: 28800
+        user:
+          $ref: '#/components/schemas/User'
+    IntrospectRequest:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+    IntrospectResponse:
+      type: object
+      required: [active]
+      properties:
+        active:
+          type: boolean
+        userId:
+          type: string
+        username:
+          type: string
+        role:
+          type: string
+          enum: [ADMIN, OPERATOR, VIEWER]
+        permissions:
+          type: array
+          items:
+            type: string
+        expiresAt:
+          type: string
+          format: date-time
+    CreateUserRequest:
+      type: object
+      required: [username, password, role]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 64
+          pattern: '^[a-z][a-z0-9._-]{2,63}$'
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+        displayName:
+          type: string
+          maxLength: 64
+        role:
+          type: string
+          enum: [ADMIN, OPERATOR, VIEWER]
+    UpdateUserRequest:
+      type: object
+      required: [role, status]
+      properties:
+        displayName:
+          type: string
+          maxLength: 64
+        role:
+          type: string
+          enum: [ADMIN, OPERATOR, VIEWER]
+        status:
+          type: string
+          enum: [ACTIVE, DISABLED]
+    ChangePasswordRequest:
+      type: object
+      required: [newPassword]
+      properties:
+        oldPassword:
+          type: string
+        newPassword:
+          type: string
+          minLength: 8
+          maxLength: 128
+security:
+  - bearerAuth: []

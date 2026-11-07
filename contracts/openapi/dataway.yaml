@@ -6,6 +6,11 @@ info:
     数据网关：业务服务访问数据库的唯一出口。业务服务不持 JDBC 驱动、不写裸 SQL。
     只接受两类请求——① 声明式只读查询（必须是 SELECT 且只引用白名单表）；
     ② 模板化写入（模板在服务端登记，客户端只传模板 ID 与参数）。
+
+    iam 使用的写入模板 ID（服务端登记于 rcp-dataway 的 application.yml）：
+      iam.user.insert / iam.user.update / iam.session.insert /
+      iam.session.delete / iam.session.deleteByUser / iam.session.cleanExpired
+    iam 的只读查询只引用 iam_users / iam_sessions 两张白名单表。
 servers:
   - url: http://localhost:8090
 paths:

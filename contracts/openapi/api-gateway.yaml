@@ -1,21 +1,35 @@
 openapi: 3.0.3
 info:
   title: Risk Control Platform · API Gateway
-  version: 1.0.0
+  version: 1.1.0
   description: |
-    平台唯一对外入口。负责幂等（event_id + version）、状态机单调前进、
+    平台唯一对外入口。负责鉴权、幂等（event_id + version）、状态机单调前进、
     分级处置映射与巡查线降级。前端不得绕过本网关直连任何后端服务。
+
+    鉴权（1.1.0 引入）：
+      - 除 /api/v1/iam/**（由 IAM 自行校验）与平台自描述 /api/v1/patrol/domains 外，
+        所有 /api/v1/** 需要 `Authorization: Bearer <token>`。
+      - 令牌有效性由网关调用 IAM 的 /api/v1/iam/introspect 判定；IAM 不可用时
+        一律拒绝（fail closed），不放行未鉴权请求。
+      - 权限判定用 IAM 返回的 permissions：POST /api/v1/patrol/dispatch 需要
+        patrol:dispatch。
+      - /api/v1/iam/** 是透传路由，请求语义以 contracts/openapi/iam.yaml 为准；
+        rcp-iam（Go + Gin 实现）是平台唯一的身份与权限判定点。
 servers:
   - url: http://localhost:8080
 tags:
   - name: patrol
+  - name: iam
+    description: 透传到 rcp-iam，鉴权由 IAM 自行完成
 paths:
   /api/v1/patrol/dispatch:
     post:
       operationId: dispatchPatrolEvent
       summary: 提交巡查事件
       tags: [patrol]
-      description: 幂等受理一个巡查事件，路由到对应巡查线并返回裁决与处置。
+      description: |
+        幂等受理一个巡查事件，路由到对应巡查线并返回裁决与处置。
+        需要 Bearer 令牌与 patrol:dispatch 权限（令牌由 /api/v1/iam/login 签发）。
       requestBody:
         required: true
         content:
@@ -31,11 +45,18 @@ paths:
                 $ref: ../schemas/patrol-event.yaml#/response
         '400':
           description: domain 非法或请求体校验失败
+        '401':
+          description: 令牌缺失、无效或已吊销
+        '403':
+          description: 令牌有效但缺少 patrol:dispatch 权限
+        '503':
+          description: 鉴权服务不可用（fail closed，不放行）
   /api/v1/patrol/domains:
     get:
       operationId: listDomains
       summary: 平台自描述（巡查线清单）
       tags: [patrol]
+      security: []
       responses:
         '200':
           description: 巡查线列表
@@ -50,3 +71,49 @@ paths:
                     type: array
                     items:
                       type: string
+  /api/v1/iam/**:
+    get:
+      operationId: proxyIamGet
+      summary: 透传 GET 到 IAM
+      tags: [iam]
+      description: |
+        路径、查询串、请求体与 Authorization 头原样转发到 rcp-iam（服务发现按名解析）。
+        响应状态码与响应体原样返回，网关不改写 IAM 的错误语义。
+      security: []
+      responses:
+        '200':
+          description: IAM 原始响应
+    post:
+      operationId: proxyIamPost
+      summary: 透传 POST 到 IAM
+      tags: [iam]
+      security: []
+      responses:
+        '200':
+          description: IAM 原始响应（含 201/204 等由 IAM 决定）
+    put:
+      operationId: proxyIamPut
+      summary: 透传 PUT 到 IAM
+      tags: [iam]
+      security: []
+      responses:
+        '200':
+          description: IAM 原始响应
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: 不透明令牌，由 IAM 的 /api/v1/iam/login 签发。
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          example: INVALID_TOKEN
+        message:
+          type: string
+security:
+  - bearerAuth: []
