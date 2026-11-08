@@ -13,10 +13,10 @@
 | 红线 | 已完成 | RL-007 生效中，`policy/redlines.ttl` 的「例外登记」为空，无任何例外 |
 | 本地编排基础设施 | 已完成 | `rcp-ops/docker-compose.yml` 的 `nacos` 服务 + `nacos-init`（一次性幂等创建 risk-control namespace） |
 | 集群清单基础设施 | 已完成 | `rcp-ops/k8s/05-nacos.yaml`，已进 `kustomization.yaml` |
-| 应用侧 discovery 依赖 | 已接线（仅 Java 侧） | 5 个 Java 服务（api-gateway 与四条巡查线）`pom.xml` 引入 `spring-cloud-starter-alibaba-nacos-discovery`，`application.yml` 按 `${NACOS_SERVER:nacos:8848}` 占位符配置；`@SpringBootTest` 显式关闭 discovery（测试环境无注册中心）。3 个 Go 服务（iam/dataway/db-ops）**不接 Nacos**：按部署侧 Service 名经 DNS 解析（`rcp:fallback` 即 `k8s-dns`），清单同样不写上游 URL |
-| 网关按服务名寻址 | 已实现 | `HttpPatrolClient` 先查 `DiscoveryClient`（多实例轮转），注册中心不可用或无实例时回落 `patrol.routes.endpoints`（本地默认值，部署侧不再注入环境变量）；IAM 的鉴权与透传共用 `IamAddressResolver`（发现优先、`iam.routes.endpoint` 兜底） |
-| 清单写死地址 | 已清除 | compose、`01-configmap.yaml`、`10-api-gateway.yaml` 中共 12 处 `PATROL_ROUTES_ENDPOINTS_*` 全部删除 |
-| 运行时标定 | 未执行（demo 定位，不要求） | 平台不真实运行；若后续需要，起 compose（或本机 Nacos standalone + 5 个 jar + 3 个 Go 二进制）按下方验收复核 |
+| 应用侧 discovery 依赖 | 已接线（仅 Java 侧） | 4 个 Java 服务（四条巡查线）`pom.xml` 引入 `spring-cloud-starter-alibaba-nacos-discovery`，`application.yml` 按 `${NACOS_SERVER:nacos:8848}` 占位符配置；`@SpringBootTest` 显式关闭 discovery（测试环境无注册中心）。4 个 Go 服务（api-gateway/iam/dataway/db-ops）**不接 Nacos**：按部署侧 Service 名经 DNS 解析（`rcp:fallback` 即 `k8s-dns`），清单同样不写上游 URL |
+| 网关按服务名寻址 | 已实现（Go 侧形态） | 网关已迁 Go，不再引 `DiscoveryClient`：`internal/config` 从 `PATROL_<DOMAIN>_HOST/_PORT`、`IAM_HOST/_PORT` 取服务名与端口，按 DNS 解析；网关侧不做实例轮转（由 k8s Service / compose DNS 分发），也没有 `endpoints` 兜底链。IAM 的鉴权内省与 `/api/v1/iam/**` 透传共用同一地址 |
+| 清单写死地址 | 已清除 | compose、`01-configmap.yaml`、`10-api-gateway.yaml` 中共 12 处 `PATROL_ROUTES_ENDPOINTS_*` 全部删除；Go 版清单只注入服务名 |
+| 运行时标定 | 未执行（demo 定位，不要求） | 平台不真实运行；若后续需要，起 compose（或本机 Nacos standalone + 4 个 jar + 4 个 Go 二进制）按下方验收复核 |
 
 > 部署侧配置注入不需要：占位符默认值即命中 Service 名（compose 服务名与 K8s Service 名均为
 > nacos）。唯一前提是 namespace 必须存在——compose 用 `nacos-init` 幂等创建；K8s 部署时需
@@ -51,13 +51,13 @@
 
 ### 验证依据
 
-- **编译与单测**：便携 JDK 17 + Maven 3.9.16 下 5 个 Java 服务 `mvn test` 全部通过（70 条测试；
-  该基线采集于 IAM 接入前，且 dataway/db-ops 已迁 Go，计数按当前 Java 服务数）。
-  Go 服务（iam/dataway/db-ops）以 `go vet` / `go test` / `go build` 验收，不经 Maven。
+- **编译与单测**：便携 JDK 17 + Maven 3.9.16 下 4 个 Java 巡查线 `mvn test` 全部通过（70 条测试；
+  该基线采集于 IAM 接入前，且 api-gateway/dataway/db-ops 已迁 Go，计数按当前 Java 服务数）。
+  Go 服务（api-gateway/iam/dataway/db-ops）以 `go vet` / `go test` / `go build` 验收，不经 Maven。
 - **机械检查**：下方验收命令应输出 **0 错误 0 提示**——这是"清单里真的没有写死地址、
   例外真的删了"的机械依据，不看自述。
 - **运行时行为**（注册延迟、按名解析、失败降级的实测）：demo 定位下未执行。
-  网关的降级语义已由单测覆盖（注册中心异常/无实例时回落配置地址，巡查线不可用转加审），
+  网关的降级语义已由单测覆盖（巡查线不可用转加审、IAM 不可达 503 fail closed），
   真实环境的数值标定留待有集群时进行。
 
 ### 验收命令
@@ -79,8 +79,8 @@ python rcp-contracts/tools/contract_lint.py --contracts rcp-contracts --baseline
   Nacos config，需另立 `config` 段与迁移步骤。
 - K8s 侧 namespace 初始化 Job：compose 有 `nacos-init`，K8s 清单暂无对应 Job，
   部署时需保证 namespace `risk-control` 先于服务存在。
-- **Go 服务的发现能力**：iam/dataway/db-ops 不注册 Nacos，只靠 K8s Service DNS 解析，
-  因此没有注册中心侧的实例健康视图与摘流能力。若将来 dataway 需要多实例轮转或被网关
-  按注册名调用，要先为 Go 侧接 `nacos-sdk-go`，并把 `rcp:discoveryState` 的语义按
+- **Go 服务的发现能力**：api-gateway/iam/dataway/db-ops 不注册 Nacos，只靠 K8s Service DNS 解析，
+  因此没有注册中心侧的实例健康视图与摘流能力，网关也不再自己做实例轮转。若将来 Go 侧
+  需要按注册名调用或多实例轮转，要先接 `nacos-sdk-go`，并把 `rcp:discoveryState` 的语义按
   "Java 注册 / Go 不注册"这段差异重新表述——当前 `"wired"` 只对 Java 侧成立。
 - 运行时数值标定（注册延迟、健康检查、降级阈值）：见上，demo 定位下不预设。
