@@ -6,8 +6,8 @@ Go/Gin 注册，按仓内 go.mod 判定），做两向差集。
 只做机械事实：不判断语义、不签发放行，缺口由人补。
 
 用法：
-    python tools/contract_check.py --repo ../rcp-content-patrol \
-        --contract contracts/openapi/content-patrol.yaml [--json]
+    python tools/contract_check.py --repo ../rcp-iam \
+        --contract contracts/openapi/iam.yaml [--json]
 
 退出码：0 无差集；1 存在差集；2 输入缺失或解析失败。
 """
@@ -43,7 +43,7 @@ def normalize(path: str) -> str:
 
 
 def contract_routes(contract_file: Path) -> set[str]:
-    """抽取契约里的路由集合，形如 'POST /api/v1/patrol/check'。"""
+    """抽取契约里的路由集合，形如 'POST /api/v1/iam/login'。"""
     spec = yaml.safe_load(contract_file.read_text(encoding="utf-8"))
     if not spec or "paths" not in spec:
         raise ValueError(f"{contract_file} 缺少 paths 段")

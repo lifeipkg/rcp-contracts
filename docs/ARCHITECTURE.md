@@ -1,73 +1,54 @@
 # Risk Control Platform · 架构全景
 
-> 蓝领招聘平台的**统一风控中台**。平台只有一个，巡查只是内部功能；
-> 实现上拆为**多仓**：契约仓 + 本体仓 + 基座仓 + 网关 + 身份与访问管理 + 四条巡查线 + 数据网关 + 数据库操作服务 + 前端 + 部署。
+> 多仓工作区的**统一网关中台**。定位已从「风控巡查平台」转向**统一 API 网关
+> （Token 分流）**方向：把多家上游收敛到一个对外入口，做渠道调度、鉴权、用量与配额。
 >
-> **定位：架构演示工作区** —— 展示业务建模、服务拆分、契约治理与部署形态；含 CI 模板，但不含真实集群与生产发布。
+> 当前状态：**瘦身后的 8 仓干净骨架**。原四条巡查线与共享基座 `rcp-core` 已移除，
+> 服务层清一色 Go。Token 网关的领域模型与契约尚未建立，见文末演进路线。
+>
+> **定位：架构演示工作区** —— 展示服务拆分、契约治理与部署形态；含 CI 模板，不含真实集群与生产发布。
 
-## 1. 业务全景
+## 1. 仓清单（8 个）
 
-平台治理四类业务风险，对应四条内部巡查线：
-
-| 巡查线 | 服务仓 | 风险场景 | 核心技术 | 决策方式 |
-|---|---|---|---|---|
-| 内容巡查 | `rcp-content-patrol` | 黑中介洗稿岗位、信息流重复 | SimHash + 3-gram + 抽屉原理分段索引 | 双通道判重（正文 SimHash 主通道 + 标题编辑距离兜底） |
-| 消息巡查 | `rcp-message-patrol` | 飞单/私单诱导话术 | AC 自动机 + 三步变体归一化 + 角色分级 | 白名单降级 + 招聘侧拦截 / 求职侧提示 |
-| 账号巡查 | `rcp-account-patrol` | 接码注册、设备农场养号 | 号段特征 + 设备/IP 聚集 + 行为序列 | 规则引擎（6 条分级规则） |
-| 资金巡查 | `rcp-fund-patrol` | 补贴薅取、领补贴团伙 | 放款前后分层 + 设备/银行卡聚集 | 规则引擎（4 条分层规则） |
-
-`rcp-api-gateway` 是所有风险的**唯一入口**，承担共同基建：鉴权、事件路由、消费幂等（`event_id+version`）、
-状态机单调前进、分级处置、巡查线降级（不可用转人工加审，绝不漏审）。
-
-**鉴权链的真源是 `rcp-iam`（Go + Gin 实现）**：用户、登录会话、令牌内省与角色权限。网关不解析
-令牌、不存角色表——每个受保护请求都调 `/api/v1/iam/introspect` 取 `permissions`，IAM 不可用
-时一律拒绝（fail closed）。角色：`ADMIN`（巡查派发 + 用户管理）、`OPERATOR`（巡查派发）、
-`VIEWER`（只读）。早期 Java 版实现已退役，本服务是平台唯一 IAM。
-
-用户与会话经 `dataway` 的 HTTP 契约落 PostgreSQL，不持数据库驱动（RL-005）；
-DDL 只在 `rcp-ops/migrations`（RL-004）。
-
-`rcp-core` 是共享基座：统一决策模型（`Decision`/`PatrolVerdict`）、同构 Pipeline 抽象
-（归一化 → 特征提取 → 检测 → 决策）、轻量规则引擎（优先级短路 + 不可变快照）。
+| 仓 | 角色 | 是什么 |
+|---|---|---|
+| `rcp-ontology` | 元仓 | 声明层唯一真源（四层 TTL）+ 检查器 |
+| `rcp-contracts` | 元仓 | 接口契约（4 份 OpenAPI）+ 对表工具 |
+| `rcp-ops` | 元仓 | 迁移真源、K8s/compose 部署清单、构建脚本 |
+| `rcp-api-gateway` | 网关 | 对外唯一入口，Go + Gin :8080 |
+| `rcp-iam` | 服务 | 平台唯一 IAM，Go + Gin :8085 |
+| `rcp-dataway` | 数据网关 | 业务访问数据库的唯一出口，Go + Gin :8090 |
+| `rcp-db-ops` | 服务 | 版本化 DDL 的唯一执行者，Go + Gin :8091 |
+| `rcp-web` | 前端 | 运营控制台，零构建静态站 :5173 |
 
 ## 2. 架构
 
 ```mermaid
 flowchart TB
     subgraph 入口
-        WEB[rcp-web<br/>运营台]
-        BIZ[业务事件源<br/>岗位/消息/账号/资金]
+        WEB[rcp-web<br/>运营控制台]
+        BIZ[外部调用方]
     end
     WEB -->|同源 /api| G
     BIZ --> G
 
-    G[rcp-api-gateway :8080<br/>鉴权 / 幂等 / 状态机 / 分级处置 / 降级]
+    G[rcp-api-gateway :8080<br/>鉴权透传 / 路由 / 上游转发]
 
     IAM[rcp-iam :8085<br/>Go/Gin · 用户 / 会话 / 内省 / 角色]
     G -->|逐请求内省 + 登录透传| IAM
-
-    subgraph 巡查线 内部服务 不对外
-        G -->|content| C[rcp-content-patrol :8081<br/>SimHash 判重]
-        G -->|message| M[rcp-message-patrol :8082<br/>AC 自动机]
-        G -->|account| A[rcp-account-patrol :8083<br/>账号规则引擎]
-        G -->|fund| F[rcp-fund-patrol :8084<br/>资金规则引擎]
-    end
-
-    C & M & A & F --> CORE[rcp-core<br/>统一模型 / Pipeline / 规则引擎]
 
     subgraph 数据面
         DW[rcp-dataway :8090<br/>SQL 守卫 + 写入模板]
         DB[(PostgreSQL)]
         DBO[rcp-db-ops :8091<br/>版本化迁移]
     end
-    G -.模板写入.-> DW
     IAM -->|/dataway/query + /dataway/execute| DW
     DW --> DB
     DBO -->|只执行 DDL| DB
 
     subgraph 声明层
         ON[rcp-ontology<br/>四层 TTL 唯一真源 + 检查器]
-        CT[rcp-contracts<br/>OpenAPI / 生成物 schema]
+        CT[rcp-contracts<br/>OpenAPI]
     end
     ON -.校验.-> CT
     CT -.契约先行.-> G
@@ -75,70 +56,62 @@ flowchart TB
 
 ## 3. 统一契约
 
-平台只有一个巡查契约，新增巡查线 = 新增一个服务仓 + 在 `rcp-ontology/ontology/abox/services.ttl` 登记 + 挂一份 OpenAPI：
-
-```
-POST /api/v1/patrol/dispatch          # 网关唯一入口
-{
-  "eventId": "job:123",               # 幂等键
-  "domain":  "content",               # 巡查线路由键: content/message/account/fund
-  "version": 1,                       # 事件版本（重放拒绝旧版本）
-  "payload": { ...巡查线业务字段... }
-}
-→ { "accepted": true, "verdict": {...}, "disposition": {"action": "BLOCK"}, ... }
-```
-
-每条巡查线暴露统一检测接口 `POST /api/v1/patrol/check`（payload 即请求体），返回统一
-`PatrolVerdict { eventId, decision, score, reason, detail }`。
-
-**鉴权契约**（`contracts/openapi/iam.yaml`）：`POST /api/v1/iam/login` 签发不透明 Bearer 令牌，
+**鉴权**（`contracts/openapi/iam.yaml`）：`POST /api/v1/iam/login` 签发不透明 Bearer 令牌，
 `POST /api/v1/iam/introspect` 返回 `{active, userId, role, permissions[], expiresAt}`。
-除登录与平台自描述外，所有 `/api/v1/**` 都要带令牌；网关对 `POST /api/v1/patrol/dispatch`
-要求 `patrol:dispatch` 权限。令牌形态与权限展开只在 IAM 一处，下游不解析令牌。
+除登录外所有 `/api/v1/**` 都要带令牌；令牌形态与权限展开只在 IAM 一处，下游不解析令牌。
 
-**决策枚举（全平台统一）**：`PASS → WARN → LIMIT → EXTRA_REVIEW → INTERCEPT → BAN`
-（状态机只允许沿此序单调前进，回跳拒绝）。枚举三处必须逐字一致：`rcp-ontology/ontology/tbox/decisions.ttl`（唯一真源）、`rcp-core` 的 `Decision`（实现）、由真源 `render-schema` 生成的 `rcp-contracts/contracts/schemas/decision.yaml`（生成物）。三者不一致即 RL-003 判红，生成物禁止手改。
+**网关当前暴露面**（`contracts/openapi/api-gateway.yaml` v2.0.0）：
+只保留 `/api/v1/iam/**` 透传（GET/POST/PUT），鉴权由 IAM 自行完成。
+原 `/api/v1/patrol/*` 已随巡查线一并移除；上游转发契约（`/v1/**`）待新方向建模后另行升版。
 
-## 4. 巡查线业务规则速览
+**鉴权链的真源是 `rcp-iam`**：用户、登录会话、令牌内省与角色权限。网关不解析
+令牌、不存角色表——每个受保护请求都调 `/api/v1/iam/introspect` 取 `permissions`，
+IAM 不可用时一律拒绝（fail closed）。角色：`ADMIN` / `OPERATOR` / `VIEWER`。
 
-**内容巡查**：城市+工种分片前置（跨城市同模板合法）→ SimHash 汉明距离 ≤3 判重 → 标题编辑距离 ≤4 兜底；判重即拦截。
+用户与会话经 `dataway` 的 HTTP 契约落 PostgreSQL，不持数据库驱动（RL-005）；
+DDL 只在 `rcp-ops/migrations`（RL-004）。
 
-**消息巡查**：符号归一（➕→加/❤→信）→ 干扰符剔除（破解"加.薇.芯"）→ 变体映射（vx/薇芯→微信）→ AC 自动机一次扫描；招聘侧命中拦截、求职侧仅提示、官方话术白名单放行。
-
-**账号巡查**：虚拟号段+设备聚集 → 封禁；同设备 ≥5 账号 → 封禁；同 IP 24h 注册 ≥10 → 拦截；虚拟号段单独命中 → 加审；夜间批量注册 → 加审；24h 发帖 ≥20 → 限流。
-
-**资金巡查**：同银行卡 ≥3 账号 → 封禁（团伙）；同设备 ≥3 账号且金额 ≥500 → 拦截；新号（≤3 天）高额（≥200）→ 加审（放款前分层）；24h 申请 ≥5 → 限流。
-
-## 5. 数据面分层
+## 4. 数据面分层
 
 | 层 | 仓 | 职责 | 红线 |
 |---|---|---|---|
-| 数据访问 | `rcp-dataway` | 业务服务访问数据库的唯一出口：SQL 守卫（单条只读 + 表白名单）+ 写入模板；`iam` 经它读写 `iam_users` / `iam_sessions` | RL-005：业务仓不得引入数据库驱动（Java 查 `pom.xml`、Go 查 `go.mod`，检查器两者都扫） |
+| 数据访问 | `rcp-dataway` | 业务服务访问数据库的唯一出口：SQL 守卫（单条只读 + 表白名单）+ 写入模板；`iam` 经它读写 `iam_users` / `iam_sessions` | RL-005：业务仓不得引入数据库驱动（Go 查 `go.mod`，检查器还兼容 `pom.xml`） |
 | 结构变更 | `rcp-db-ops` | 版本化 DDL 的唯一执行者：按序执行、台账、回滚 | RL-004：DDL 只能在 `rcp-ops/migrations` |
 | 迁移真源 | `rcp-ops` | `migrations/` 版本化脚本 + K8s 清单 + 本地 compose | — |
+
+## 5. 架构红线（5 条）
+
+| 编号 | 约束 |
+|---|---|
+| RL-002 | 对外入口只能是网关与前端；其余服务必须 `external=false` |
+| RL-004 | DDL 只能出现在 `rcp-ops/migrations` |
+| RL-005 | 业务服务不得引入数据库驱动，读写只能经 dataway |
+| RL-006 | 服务必须登记并挂契约 |
+| RL-007 | 部署清单不得写死内部服务地址 |
+
+红线原为 7 条，RL-001（巡查线互调）与 RL-003（决策语义三方一致）随巡查线一并移除。
 
 ## 6. 快速开始
 
 ```bash
-# 全量构建（契约 → 本体 → 基座 → 各服务 → 前端 → 部署，任一步红灯即停）
+# 全量构建（契约 → 本体 → 各服务 → 前端 → 部署，任一步红灯即停）
 rcp-ops/tools/build_all.sh
 
 # 本地起全平台（含 PostgreSQL，构建上下文指向兄弟仓）
 cd rcp-ops && docker compose up --build
 
-# 只跑某条巡查线
-cd rcp-content-patrol && mvn -B verify
+# 单个服务
+cd rcp-api-gateway && go test ./... && go build ./...
 
 # 前端
 cd rcp-web && python -m http.server 5173
 ```
 
-## 7. 生产化演进路线
+## 7. 演进路线（Token 分流方向）
 
-- [ ] 幂等/状态机从进程内 Map 落到 PostgreSQL（表结构已备：`rcp-ops/migrations/V1.0.0__common_schema.sql`）
-- [ ] IAM 会话与用户落库（经 dataway 模板写入），支持 IAM 多副本与刷新令牌
-- [ ] 接入层从同步 HTTP 演进为 Kafka 事件总线（网关契约不变，巡查线消费各自 topic）
-- [ ] 规则/词库管理端 + 热更新（规则快照原子切换，`patrol_rule` 表已备）
-- [ ] 人工复核工作台 + 误杀/漏放标注回流（词库、阈值月度重标定）
-- [ ] 巡查指标大盘（桶倾斜/堆积/命中率/误杀率）
-- [ ] OpenTelemetry 全链路追踪（eventId 贯穿网关与巡查线）
+- [ ] 领域建模：渠道（channel）/ 令牌（token）/ 分组（group）/ 配额（quota）/ 用量账本（usage）
+- [ ] 契约先行：`contracts/openapi/` 新增 OpenAI 兼容 `/v1/**` 与渠道管理接口
+- [ ] 网关改造：协议转换 + 多渠道按权重/成本调度 + 429/5xx 故障转移
+- [ ] 数据面：渠道与令牌经 dataway 落 PostgreSQL，迁移脚本进 `rcp-ops/migrations`
+- [ ] 控制台：渠道管理、令牌签发、用量与成本看板
+- [ ] 上游方案：直接部署 new-api（AGPL-3.0）与本仓网关的边界需先定清

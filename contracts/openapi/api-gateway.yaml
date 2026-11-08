@@ -1,76 +1,26 @@
 openapi: 3.0.3
 info:
   title: Risk Control Platform · API Gateway
-  version: 1.1.0
+  version: 2.0.0
   description: |
-    平台唯一对外入口。负责鉴权、幂等（event_id + version）、状态机单调前进、
-    分级处置映射与巡查线降级。前端不得绕过本网关直连任何后端服务。
+    平台唯一对外入口。前端不得绕过本网关直连任何后端服务。
 
-    鉴权（1.1.0 引入）：
-      - 除 /api/v1/iam/**（由 IAM 自行校验）与平台自描述 /api/v1/patrol/domains 外，
-        所有 /api/v1/** 需要 `Authorization: Bearer <token>`。
+    鉴权：
+      - 除 /api/v1/iam/**（由 IAM 自行校验）外，所有 /api/v1/** 需要
+        `Authorization: Bearer <token>`。
       - 令牌有效性由网关调用 IAM 的 /api/v1/iam/introspect 判定；IAM 不可用时
         一律拒绝（fail closed），不放行未鉴权请求。
-      - 权限判定用 IAM 返回的 permissions：POST /api/v1/patrol/dispatch 需要
-        patrol:dispatch。
       - /api/v1/iam/** 是透传路由，请求语义以 contracts/openapi/iam.yaml 为准；
         rcp-iam（Go + Gin 实现）是平台唯一的身份与权限判定点。
+
+    2.0.0 起移除巡查事件入口（/api/v1/patrol/*）与决策处置语义，
+    平台转向统一 API 网关方向；新增上游转发契约另行升版。
 servers:
   - url: http://localhost:8080
 tags:
-  - name: patrol
   - name: iam
     description: 透传到 rcp-iam，鉴权由 IAM 自行完成
 paths:
-  /api/v1/patrol/dispatch:
-    post:
-      operationId: dispatchPatrolEvent
-      summary: 提交巡查事件
-      tags: [patrol]
-      description: |
-        幂等受理一个巡查事件，路由到对应巡查线并返回裁决与处置。
-        需要 Bearer 令牌与 patrol:dispatch 权限（令牌由 /api/v1/iam/login 签发）。
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: ../schemas/patrol-event.yaml#/request
-      responses:
-        '200':
-          description: 已受理（或幂等拒绝但仍返回结构化结果）
-          content:
-            application/json:
-              schema:
-                $ref: ../schemas/patrol-event.yaml#/response
-        '400':
-          description: domain 非法或请求体校验失败
-        '401':
-          description: 令牌缺失、无效或已吊销
-        '403':
-          description: 令牌有效但缺少 patrol:dispatch 权限
-        '503':
-          description: 鉴权服务不可用（fail closed，不放行）
-  /api/v1/patrol/domains:
-    get:
-      operationId: listDomains
-      summary: 平台自描述（巡查线清单）
-      tags: [patrol]
-      security: []
-      responses:
-        '200':
-          description: 巡查线列表
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  platform:
-                    type: string
-                  patrolLines:
-                    type: array
-                    items:
-                      type: string
   /api/v1/iam/**:
     get:
       operationId: proxyIamGet
