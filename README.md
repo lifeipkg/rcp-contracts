@@ -15,11 +15,12 @@
 | `contracts/openapi/*.yaml` | 各服务对外 HTTP 契约（OpenAPI 3.0.3） |
 | `contracts/schemas/*.yaml` | 跨服务共享结构（结论、事件、决策），禁止各服务内联复制 |
 | `contracts/schemas/decision.yaml` | **生成物**：由 `rcp-ontology` 的 `cli.py render-schema` 从 `tbox/decisions.ttl` 产出。手改会被 RL-003 判红 |
-| `tools/contract_check.py` | 契约→实现 机械对表（OpenAPI 路由 ↔ Spring 路由，两向差集） |
+| `tools/contract_check.py` | 契约→实现 机械对表（OpenAPI 路由 ↔ 实现路由，两向差集；有 `go.mod` 走 Gin 注册，否则走 Spring 注解） |
 | `tools/contract_lint.py` | 契约层静态检查：`$ref` 可解析、决策枚举未内联、与基线无破坏性变更 |
 | `tests/test_contract_lint.py` | 上一条的反向测试：每条检查都必须能抓到对应违反 |
 | `docs/DISCOVERY.md` | 服务发现现状、为什么停在声明层、接线步骤与验收命令 |
 | `.github/workflows/java-service.yml` | 共享 CI 模板，Java 服务仓 `workflow_call` 复用 |
+| `.github/workflows/go-service.yml` | 共享 CI 模板，Go 服务仓复用（不检出 `rcp-core`，走 `go vet/test/build`） |
 
 ## 常用命令
 

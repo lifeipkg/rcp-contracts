@@ -1,0 +1,65 @@
+name: go-service
+
+# 共享 CI 模板：所有 Go 服务仓复用。与 java-service.yml 平行，差别有两处：
+#   1) 不检出 rcp-core——它是 Java 库，Go 服务不依赖它，因此也没有 core-ref 参数；
+#   2) 用 go vet/test/build + go.sum 校验，不用 Maven。
+# 调用方（服务仓 .github/workflows/ci.yml）：
+#   uses: lifeipkg/rcp-contracts/.github/workflows/go-service.yml@main
+#   with: { service: dataway, contract: contracts/openapi/dataway.yaml }
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: 服务名，用于报告标识
+        required: true
+        type: string
+      contract:
+        description: 本仓挂的契约文件（相对 rcp-contracts 仓根）
+        required: true
+        type: string
+      go-version:
+        description: Go 版本（版本真源在 rcp-ontology/ontology/abox/platform.ttl 的 rcp:stack）
+        required: false
+        type: string
+        default: '1.22'
+
+jobs:
+  build:
+    name: build · ${{ inputs.service }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出实现仓
+        uses: actions/checkout@v4
+
+      - name: 检出契约仓
+        uses: actions/checkout@v4
+        with:
+          repository: lifeipkg/rcp-contracts
+          path: .deps/rcp-contracts
+
+      - name: Go ${{ inputs.go-version }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ inputs.go-version }}
+          cache: true
+
+      # go.sum 必须入库：这里不做 go mod tidy（那会改写依赖图），只校验可复现
+      - name: 校验依赖完整
+        run: go mod verify
+
+      - name: 静态检查
+        run: go vet ./...
+
+      - name: 单元测试（含拒绝/fail-closed 反向用例）
+        run: go test ./...
+
+      - name: 构建
+        run: go build ./...
+
+      - name: 契约→实现 对表
+        run: |
+          python -m pip install --quiet pyyaml
+          python .deps/rcp-contracts/tools/contract_check.py \
+            --repo . \
+            --contract .deps/rcp-contracts/${{ inputs.contract }}
