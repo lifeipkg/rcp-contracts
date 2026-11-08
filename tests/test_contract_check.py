@@ -29,7 +29,7 @@ def test_gin_wildcards_are_normalized_to_contract_form(tmp_path: Path) -> None:
         r.GET("/api/v1/iam/*path", h)
         r.POST("/api/v1/iam/*path", h)
         r.PUT("/api/v1/users/:userId/password", h)
-        r.POST("/api/v1/patrol/dispatch", h)
+        r.POST("/api/v1/iam/login", h)
         """,
     )
 
@@ -37,24 +37,24 @@ def test_gin_wildcards_are_normalized_to_contract_form(tmp_path: Path) -> None:
         "GET /api/v1/iam/**",
         "POST /api/v1/iam/**",
         "PUT /api/v1/users/{}/password",
-        "POST /api/v1/patrol/dispatch",
+        "POST /api/v1/iam/login",
     }
 
 
 def test_worktree_sources_are_not_counted(tmp_path: Path) -> None:
-    repo = _go_repo(tmp_path, 'r.POST("/api/v1/patrol/dispatch", h)\n')
+    repo = _go_repo(tmp_path, 'r.POST("/api/v1/iam/login", h)\n')
     worktree = repo / ".agents" / "worktrees" / "gw"
     worktree.mkdir(parents=True)
-    (worktree / "main.go").write_text('r.GET("/api/v1/iam/*path", h)\n', encoding="utf-8")
+    (worktree / "main.go").write_text('r.GET("/api/v1/ghost/*path", h)\n', encoding="utf-8")
 
     routes = check.go_routes(repo)
 
-    assert "POST /api/v1/patrol/dispatch" in routes
-    assert not any("iam" in route for route in routes), "worktree 里的路由不该算进当前实现"
+    assert "POST /api/v1/iam/login" in routes
+    assert not any("ghost" in route for route in routes), "worktree 里的路由不该算进当前实现"
 
 
 def test_test_files_are_not_counted(tmp_path: Path) -> None:
-    repo = _go_repo(tmp_path, 'r.POST("/api/v1/patrol/dispatch", h)\n')
+    repo = _go_repo(tmp_path, 'r.POST("/api/v1/iam/login", h)\n')
     (repo / "router_test.go").write_text('r.DELETE("/api/v1/ghost", h)\n', encoding="utf-8")
 
     assert "DELETE /api/v1/ghost" not in check.go_routes(repo)

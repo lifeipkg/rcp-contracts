@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""契约层静态检查：$ref 可解析、决策枚举不内联、与基线的破坏性变更。
+"""契约层静态检查：$ref 可解析、与基线的破坏性变更。
 
 这是"契约能不能对表"的静态下限，不是运行时契约测试（Pact / provider verification
-需要起服务，本工作区无真实集群，不在此假装做到）。三项检查都可离线复算：
+需要起服务，本工作区无真实集群，不在此假装做到）。两项检查都可离线复算：
 
-    python tools/contract_lint.py --contracts .                    # 引用 + 决策内联
+    python tools/contract_lint.py --contracts .                    # 引用解析
     python tools/contract_lint.py --contracts . --baseline HEAD~1   # 追加破坏性变更对比
 
 退出码：0 无错误；1 有错误；2 输入不可用。
@@ -20,8 +20,6 @@ from pathlib import Path
 from typing import Any, Iterator
 
 import yaml
-
-DECISION_ENUM_FILE = Path("contracts/schemas/decision.yaml")
 
 EXIT_OK = 0
 EXIT_FINDINGS = 1
@@ -72,11 +70,6 @@ def ref_target(ref: str, base_dir: Path) -> Path | None:
     return (base_dir / file_part).resolve()
 
 
-def decision_enum(contracts: Path) -> list[str]:
-    data = load_yaml(contracts / DECISION_ENUM_FILE) or {}
-    return list(data.get("enum") or [])
-
-
 def yaml_files(contracts: Path) -> list[Path]:
     return sorted(
         path
@@ -102,50 +95,6 @@ def check_refs(contracts: Path) -> list[Finding]:
             if not target.is_file():
                 findings.append(
                     Finding("error", "E401", f"{rel} 的 $ref 指向不存在的文件: {ref}")
-                )
-    return findings
-
-
-def check_decision_not_inlined(contracts: Path) -> list[Finding]:
-    """RL-003：决策枚举只能 $ref，不得内联。
-
-    两种违反形态都抓：字段名为 decision 却写死 enum；任意字段内联了与 Decision
-    完全相同的取值集合（换个名字内联同样会失去唯一真源）。
-    """
-    findings: list[Finding] = []
-    canonical = set(decision_enum(contracts))
-
-    for path in yaml_files(contracts):
-        if path == contracts / DECISION_ENUM_FILE:
-            continue
-        rel = path.relative_to(contracts).as_posix()
-        try:
-            spec = load_yaml(path)
-        except yaml.YAMLError:
-            continue
-        for node_path, node in iter_nodes(spec):
-            if not isinstance(node, dict):
-                continue
-            enum = node.get("enum")
-            if not isinstance(enum, list) or not enum:
-                continue
-            attribute = node_path.rsplit(".", 1)[-1].split("[", 1)[0]
-            if attribute == "decision":
-                findings.append(
-                    Finding(
-                        "error",
-                        "RL-003",
-                        f"{rel}#{node_path} 内联了 decision 枚举；应改为 $ref decision.yaml",
-                    )
-                )
-            elif canonical and set(enum) == canonical:
-                findings.append(
-                    Finding(
-                        "error",
-                        "RL-003",
-                        f"{rel}#{node_path} 内联了与 Decision 完全相同的取值集合；"
-                        f"应改为 $ref decision.yaml",
-                    )
                 )
     return findings
 
@@ -271,7 +220,6 @@ def main(argv: list[str] | None = None) -> int:
 
     findings: list[Finding] = []
     findings += check_refs(contracts)
-    findings += check_decision_not_inlined(contracts)
     if args.baseline:
         findings += check_breaking(contracts, args.baseline)
 

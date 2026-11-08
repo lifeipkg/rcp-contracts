@@ -11,9 +11,9 @@ info:
       - 令牌是不透明 Bearer 令牌，由 IAM 签发并保存会话；下游服务不解析令牌，
         只用 /introspect 判定有效性。这样"令牌语义"只有这一处，换了形态不必改下游。
 
-    角色与权限：
-      ADMIN     → patrol:dispatch, iam:users
-      OPERATOR  → patrol:dispatch
+    角色与权限（冒号分隔的 `域:动作` 字符串）：
+      ADMIN     → iam:users, iam:auth
+      OPERATOR  → iam:auth
       VIEWER    → （无）
     网关按 /introspect 返回的 permissions 判定，不在网关另写角色表。
 

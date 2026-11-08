@@ -17,18 +17,13 @@ _spec = importlib.util.spec_from_file_location("contract_lint", _LINT_PATH)
 lint = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(lint)
 
-DECISION = {"schema": "rcp.contract.schema/v1", "name": "Decision", "type": "string",
-            "enum": ["PASS", "INTERCEPT"]}
-
-
 def _write(path: Path, data) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
 
 
-def _contracts(tmp_path: Path, *, decision: dict | None = None, openapi: dict | None = None) -> Path:
+def _contracts(tmp_path: Path, *, openapi: dict | None = None) -> Path:
     contracts = tmp_path / "repo"
-    _write(contracts / "contracts" / "schemas" / "decision.yaml", decision or DECISION)
     spec = openapi or {
         "openapi": "3.0.3",
         "info": {"title": "t", "version": "1.0.0"},
@@ -65,89 +60,23 @@ def _codes(findings) -> set[str]:
 def test_clean_contracts_have_no_findings(tmp_path: Path):
     contracts = _contracts(tmp_path)
     assert lint.check_refs(contracts) == []
-    assert lint.check_decision_not_inlined(contracts) == []
-
-
-def test_inline_decision_enum_is_error(tmp_path: Path):
-    openapi = {
-        "openapi": "3.0.3",
-        "info": {"title": "t", "version": "1.0.0"},
-        "paths": {
-            "/x": {
-                "post": {
-                    "responses": {
-                        "200": {
-                            "description": "ok",
-                            "content": {
-                                "application/json": {
-                                    "schema": {
-                                        "type": "object",
-                                        "properties": {
-                                            "decision": {
-                                                "type": "string",
-                                                "enum": ["PASS", "INTERCEPT"],
-                                            }
-                                        },
-                                    }
-                                }
-                            },
-                        }
-                    }
-                }
-            }
-        },
-    }
-    contracts = _contracts(tmp_path, openapi=openapi)
-    assert "RL-003" in _codes(lint.check_decision_not_inlined(contracts))
-
-
-def test_renamed_inline_enum_with_same_values_is_error(tmp_path: Path):
-    openapi = {
-        "openapi": "3.0.3",
-        "info": {"title": "t", "version": "1.0.0"},
-        "paths": {
-            "/x": {
-                "get": {
-                    "responses": {
-                        "200": {
-                            "description": "ok",
-                            "content": {
-                                "application/json": {
-                                    "schema": {
-                                        "type": "object",
-                                        "properties": {
-                                            "level": {
-                                                "type": "string",
-                                                "enum": ["PASS", "INTERCEPT"],
-                                            }
-                                        },
-                                    }
-                                }
-                            },
-                        }
-                    }
-                }
-            }
-        },
-    }
-    contracts = _contracts(tmp_path, openapi=openapi)
-    assert "RL-003" in _codes(lint.check_decision_not_inlined(contracts))
 
 
 def test_missing_ref_target_is_error(tmp_path: Path):
     contracts = _contracts(tmp_path)
     _write(
-        contracts / "contracts" / "schemas" / "verdict.yaml",
-        {"type": "object", "properties": {"decision": {"$ref": "ghost.yaml"}}},
+        contracts / "contracts" / "schemas" / "extra.yaml",
+        {"type": "object", "properties": {"status": {"$ref": "ghost.yaml"}}},
     )
     assert "E401" in _codes(lint.check_refs(contracts))
 
 
 def test_existing_relative_ref_is_clean(tmp_path: Path):
     contracts = _contracts(tmp_path)
+    _write(contracts / "contracts" / "schemas" / "base.yaml", {"type": "string"})
     _write(
-        contracts / "contracts" / "schemas" / "verdict.yaml",
-        {"type": "object", "properties": {"decision": {"$ref": "decision.yaml"}}},
+        contracts / "contracts" / "schemas" / "extra.yaml",
+        {"type": "object", "properties": {"status": {"$ref": "base.yaml"}}},
     )
     assert lint.check_refs(contracts) == []
 
