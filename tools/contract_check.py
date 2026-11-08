@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """契约→实现 机械对表。
 
-从 OpenAPI 契约抽取路径集合，从 Java 源码抽取 Spring 路由集合，做两向差集。
+从 OpenAPI 契约抽取路径集合，从实现源码抽取路由集合（Java/Spring 注解或
+Go/Gin 注册，按仓内 go.mod 判定），做两向差集。
 只做机械事实：不判断语义、不签发放行，缺口由人补。
 
 用法：
@@ -32,6 +33,8 @@ MAPPING_METHODS = {
 
 def normalize(path: str) -> str:
     path = re.sub(r"\{[^}]*\}", "{}", path.strip())
+    # Gin 的路径参数形如 :userId，与 OpenAPI 的 {userId} 同一个槽位
+    path = re.sub(r":[A-Za-z_][A-Za-z0-9_]*", "{}", path)
     path = re.sub(r"/+", "/", path)
     if len(path) > 1 and path.endswith("/"):
         path = path[:-1]
@@ -65,12 +68,31 @@ REQUEST_MAPPING_METHOD = re.compile(
     re.S,
 )
 
+# Go/Gin 注册：要求路径写成完整字面量（不做变量拼接），才能被机械对表复核。
+GIN_ROUTE = re.compile(
+    r"\br\.(GET|POST|PUT|DELETE|PATCH)\s*\(\s*\"([^\"]+)\"",
+)
+
+
+def go_routes(repo_root: Path) -> set[str]:
+    """抽取 Go/Gin 源码中注册的路由；测试文件里的路由不计入实现面。"""
+    routes: set[str] = set()
+    for go_file in sorted(repo_root.rglob("*.go")):
+        if go_file.name.endswith("_test.go"):
+            continue
+        text = go_file.read_text(encoding="utf-8", errors="replace")
+        for method, path in GIN_ROUTE.findall(text):
+            routes.add(f"{method} {normalize(path)}")
+    return routes
+
 
 def impl_routes(repo_root: Path) -> set[str]:
-    """抽取 Java 源码中 @RestController 的路由集合。"""
+    """按仓的语言形态分派：有 go.mod 走 Gin，否则走 Spring 注解。"""
+    if (repo_root / "go.mod").is_file():
+        return go_routes(repo_root)
     java_root = repo_root / "src" / "main" / "java"
     if not java_root.is_dir():
-        raise ValueError(f"{repo_root} 下没有 src/main/java")
+        raise ValueError(f"{repo_root} 下没有 go.mod，也没有 src/main/java")
     routes: set[str] = set()
     for java_file in sorted(java_root.rglob("*.java")):
         text = java_file.read_text(encoding="utf-8", errors="replace")
@@ -110,6 +132,7 @@ def main() -> int:
             "contract": str(args.contract),
             "contract_routes": sorted(want),
             "impl_routes": sorted(got),
+            "impl_kind": "go-gin" if (args.repo / "go.mod").is_file() else "spring", 
             "missing_in_impl": missing_in_impl,
             "missing_in_contract": missing_in_contract,
             "closed": not diff,

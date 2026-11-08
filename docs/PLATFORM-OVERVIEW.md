@@ -46,7 +46,9 @@ flowchart TB
     end
 
     subgraph 接入层["接入层 · 唯一入口"]
-        G["rcp-api-gateway :8080<br/>幂等 · 状态机 · 分级处置 · 降级"]
+        G["rcp-api-gateway :8080<br/>鉴权 · 幂等 · 状态机 · 分级处置 · 降级"]
+        IAM["rcp-iam :8085<br/>Go/Gin · 用户 · 会话 · 令牌内省 · 角色"]
+        G -->|逐请求内省 / 登录透传| IAM
     end
 
     subgraph 判定层["判定层 · 四条巡查线，不对外"]
@@ -64,7 +66,7 @@ flowchart TB
     subgraph 数据面["数据面 · 唯一通道"]
         DW["rcp-dataway :8090<br/>SQL 守卫 + 模板写入"]
         DBO["rcp-db-ops :8091<br/>版本化 DDL"]
-        DB[("MySQL<br/>风控自有库")]
+        DB[("PostgreSQL<br/>风控自有库")]
     end
 
     subgraph 消费层["消费层"]
@@ -78,6 +80,7 @@ flowchart TB
     G -->|按 domain 路由| C & M & A & F
     C & M & A & F --> CORE
     G -. 模板写入 .-> DW
+    IAM -->|/dataway/query + /dataway/execute| DW
     C & M & A & F -. 只读查询 / 模板写入 .-> DW
     DW --> DB
     DBO -->|只执行 DDL| DB
@@ -89,7 +92,8 @@ flowchart TB
 
 | 服务 | 种类 | 端口 | 对外 | 职责 |
 |---|---|---|---|---|
-| `api-gateway` | 网关 | 8080 | 是 | 唯一入口：幂等、状态机、分级处置、降级编排 |
+| `api-gateway` | 网关 | 8080 | 是 | 唯一入口：鉴权、幂等、状态机、分级处置、降级编排 |
+| `iam` | 身份与访问管理 | 8085 | 否 | Go/Gin 实现：用户、登录会话、令牌内省、角色权限（**鉴权链唯一真源**）；用户与会话经 dataway 落 PostgreSQL |
 | `content-patrol` | 巡查线 | 8081 | 否 | 岗位内容判重（SimHash + 标题编辑距离兜底） |
 | `message-patrol` | 巡查线 | 8082 | 否 | 飞单话术识别（变体归一化 + AC 自动机 + 角色分级） |
 | `account-patrol` | 巡查线 | 8083 | 否 | 接码注册、设备农场养号（6 条分级规则） |
@@ -108,6 +112,8 @@ flowchart TB
 3. **状态机单调前进**。决策按 `PASS → WARN → LIMIT → EXTRA_REVIEW → INTERCEPT → BAN` 只升不降，回跳被拦截并置 `stateRollbackProtected=true`。防的是乱序消息把已封禁对象"刷回"通过。
 4. **分级处置**。决策等级到落地动作的映射集中一处，业务侧只按动作分支执行，不必理解每条线的评分逻辑。
 5. **降级不漏审**。巡查线不可用时不是放行，而是转 `EXTRA_REVIEW`（`reason=PATROL_SERVICE_DEGRADED`）。注意这是**平台默认**语义，各业务域可按 2.6 的矩阵覆盖为降级放行——但覆盖必须显式登记，不能默默改。
+
+横切于这五条之上还有**鉴权 fail closed**：网关对每个受保护请求调 `rcp-iam` 内省，令牌无效或 IAM 不可达一律拒绝（401 / 503），不存在"判不了就放行"的降级。角色到权限的展开只在 IAM 一处，网关只判"这条路由需要哪个 `permission`"。`rcp-iam` 由 Go + Gin 实现，早期 Java 版已退役；网关对受保护请求的内省链路不变。
 
 ### 1.5 四条巡查线的判定口径
 
@@ -375,7 +381,7 @@ auditLog.save(event.getEventId(), v.getDecision(), v.getReason());
 | 阶段 | 形态 | 解决的问题 | 前置条件 |
 |---|---|---|---|
 | **一（当前）** | 同步 RPC 判定 + 进程内幂等/状态机 | 建立统一入口与统一决策语义 | — |
-| **二** | 幂等/状态机落 MySQL + 名单下发 + 处置回执 + 复核工作台 | 单点重启不丢状态；指标可算；误杀可申诉 | 补 ⑤④ 两个契约 |
+| **二** | 幂等/状态机落 PostgreSQL + 名单下发 + 处置回执 + 复核工作台 | 单点重启不丢状态；指标可算；误杀可申诉 | 补 ⑤④ 两个契约 |
 | **三** | Kafka 事件总线 + 异步补判 + 特征平台 | 削峰、可回放；同步路径不再依赖反查 | topic 规划已备，需接入 |
 | **四** | 规则管理端 + 热更新 + 指标大盘 + 全链路追踪 | 阈值可运营；`eventId` 贯穿排查 | 规则快照原子切换能力 |
 
