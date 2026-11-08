@@ -18,6 +18,7 @@ import argparse
 import json
 import re
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 import yaml
@@ -72,17 +73,45 @@ REQUEST_MAPPING_METHOD = re.compile(
 GIN_ROUTE = re.compile(
     r"\br\.(GET|POST|PUT|DELETE|PATCH)\s*\(\s*\"([^\"]+)\"",
 )
+# Gin 的占位符写法与契约（Ant/OpenAPI 风格）不同，必须先归一才能比较：
+#   :id   单段参数 → {}      （与 Java 的 {id} 一致）
+#   *path 任意段通配 → **    （与 Java 的 /** 一致，网关的 IAM 透传即此形态）
+GIN_PARAM = re.compile(r":[A-Za-z_][A-Za-z0-9_]*")
+GIN_CATCH_ALL = re.compile(r"\*[A-Za-z_][A-Za-z0-9_]*")
+
+
+def gin_path(path: str) -> str:
+    """把 Gin 的路径占位符归一成契约写法。"""
+    return GIN_PARAM.sub("{}", GIN_CATCH_ALL.sub("**", path))
+
+
+# 不参与对表的目录：.agents 下存的是 git worktree（另一分支的完整副本），
+# 扫进去会把"分支上写了一半的实现在此"算成 main 的实现，结论从"未闭合"翻成"闭合"。
+# .git 与构建产物同理。
+SKIP_DIRS = {".git", ".agents", "target", "node_modules", "__pycache__"}
+
+
+def source_files(root: Path, pattern: str) -> Iterator[Path]:
+    """遍历源码文件，跳过 worktree 与构建产物目录。
+
+    只看相对 root 的路径片段：直接把某个 worktree 当 root 扫（本地排查用）时仍要能出结果，
+    只有 root 之下的 .agents/ 才是"别人的分支"。
+    """
+    for path in sorted(root.rglob(pattern)):
+        if SKIP_DIRS & set(path.relative_to(root).parts):
+            continue
+        yield path
 
 
 def go_routes(repo_root: Path) -> set[str]:
     """抽取 Go/Gin 源码中注册的路由；测试文件里的路由不计入实现面。"""
     routes: set[str] = set()
-    for go_file in sorted(repo_root.rglob("*.go")):
+    for go_file in source_files(repo_root, "*.go"):
         if go_file.name.endswith("_test.go"):
             continue
         text = go_file.read_text(encoding="utf-8", errors="replace")
         for method, path in GIN_ROUTE.findall(text):
-            routes.add(f"{method} {normalize(path)}")
+            routes.add(f"{method} {normalize(gin_path(path))}")
     return routes
 
 
@@ -94,7 +123,7 @@ def impl_routes(repo_root: Path) -> set[str]:
     if not java_root.is_dir():
         raise ValueError(f"{repo_root} 下没有 go.mod，也没有 src/main/java")
     routes: set[str] = set()
-    for java_file in sorted(java_root.rglob("*.java")):
+    for java_file in source_files(java_root, "*.java"):
         text = java_file.read_text(encoding="utf-8", errors="replace")
         if "@RestController" not in text:
             continue
